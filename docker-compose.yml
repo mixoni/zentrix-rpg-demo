@@ -1,0 +1,95 @@
+version: "3.9"
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres_account:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: account_db
+    ports:
+      - "5423:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d account_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres_character:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: character_db
+    ports:
+      - "5424:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d character_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres_combat:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: combat_db
+    ports:
+      - "5425:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d combat_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  account-service:
+    build:
+      context: ./services/account-service
+    environment:
+      PORT: "3001"
+      DATABASE_URL: "postgres://postgres:postgres@postgres_account:5432/account_db"
+      JWT_SECRET: "dev_secret_change_me"
+    depends_on:
+      postgres_account:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  character-service:
+    build:
+      context: ./services/character-service
+    environment:
+      PORT: "3002"
+      DATABASE_URL: "postgres://postgres:postgres@postgres_character:5432/character_db"
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: "dev_secret_change_me"
+      INTERNAL_TOKEN: "dev_internal_token_change_me"
+    depends_on:
+      postgres_character:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "3002:3002"
+
+  combat-service:
+    build:
+      context: ./services/combat-service
+    environment:
+      PORT: "3003"
+      DATABASE_URL: "postgres://postgres:postgres@postgres_combat:5432/combat_db"
+      JWT_SECRET: "dev_secret_change_me"
+      CHARACTER_SERVICE_URL: "http://character-service:3002"
+      INTERNAL_TOKEN: "dev_internal_token_change_me"
+    depends_on:
+      postgres_combat:
+        condition: service_healthy
+      character-service:
+        condition: service_started
+    ports:
+      - "3003:3003"

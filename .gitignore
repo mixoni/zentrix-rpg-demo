@@ -1,0 +1,76 @@
+# ===============================
+# Node / TypeScript
+# ===============================
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# ===============================
+# Logs
+# ===============================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# ===============================
+# Environment files
+# ===============================
+.env
+.env.*
+!.env.example
+
+# ===============================
+# Docker
+# ===============================
+**/docker-data/
+**/pgdata/
+**/data/
+docker-compose.override.yml
+
+# ===============================
+# OS / Editor
+# ===============================
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ===============================
+# Tests / Coverage
+# ===============================
+coverage/
+.nyc_output/
+
+# ===============================
+# Postman / HTTP clients
+# ===============================
+.postman/
+*.postman_environment.json
+
+# ===============================
+# Temporary / Cache
+# ===============================
+tmp/
+temp/
+.cache/
+
+# ===============================
+# CI / Build artifacts
+# ===============================
+*.tgz
+*.tar.gz
+
+# ===============================
+# Misc
+# ===============================
+*.pid
+*.seed
+*.swp
+*.swo
