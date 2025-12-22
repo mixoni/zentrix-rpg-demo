@@ -16,6 +16,7 @@ import { requireInternal } from "./auth/auth-internal";
 import { CreateCharacterSchema } from "./validation/character.schemas";
 import { CreateItemSchema, GiftItemSchema, GrantItemSchema } from "./validation/items.schemas";
 import { ResolveDuelSchema } from "./validation/internal.schemas";
+import { getCharacterCache, invalidateCharacterCache, setCharacterCache } from "./cache/character.cache";
 
 
 const env = {
@@ -39,10 +40,6 @@ const app = Fastify({ logger: true });
 type AuthedRequest = { user: JwtPayload };
 
 
-
-async function invalidateCharacterCache(characterId: string) {
-  await redis.del(`character:${characterId}:details`);
-}
 
 app.get("/health", async () => ({ ok: true }));
 
@@ -77,7 +74,7 @@ app.get("/api/character/:id", async (req, reply) => {
 
   // cache key
   const key = `character:${id}:details`;
-  const cached = await redis.get(key);
+  const cached = await getCharacterCache(redis,key);
   if (cached) return JSON.parse(cached);
 
   const character = await CharactersRepo.getDetailsWithClass(pool, id);
@@ -130,7 +127,7 @@ app.get("/api/character/:id", async (req, reply) => {
     })),
   };
 
-  await redis.set(key, JSON.stringify(result), "EX", 120);
+  await setCharacterCache(redis,key, JSON.stringify(result));
   return result;
 });
 
@@ -254,7 +251,7 @@ app.post("/api/items/grant", async (req, reply) => {
   if (!itOk) return reply.code(404).send({ error: "ITEM_NOT_FOUND" });
 
   const row = await CharacterItemsRepo.insertInstance(pool, body.characterId, body.itemId);
-  await invalidateCharacterCache(body.characterId);
+  await invalidateCharacterCache(redis, body.characterId);
 
   return reply.code(201).send({ itemInstanceId: row!.id });
 });
@@ -284,8 +281,8 @@ app.post("/api/items/gift", async (req, reply) => {
 
   await CharacterItemsRepo.transferInstance(pool, body.itemInstanceId, body.toCharacterId);
 
-  await invalidateCharacterCache(body.fromCharacterId);
-  await invalidateCharacterCache(body.toCharacterId);
+  await invalidateCharacterCache(redis, body.fromCharacterId);
+  await invalidateCharacterCache(redis, body.toCharacterId);
 
   return { ok: true };
 });
@@ -338,16 +335,16 @@ app.post("/internal/duels/resolve", async (req, reply) => {
 
   if (loserItems.length === 0) {
     // nothing to transfer
-    await invalidateCharacterCache(Body.winnerCharacterId);
-    await invalidateCharacterCache(Body.loserCharacterId);
+    await invalidateCharacterCache(redis, Body.winnerCharacterId);
+    await invalidateCharacterCache(redis, Body.loserCharacterId);
     return { transferred: null };
   }
 
   const pick = loserItems[Math.floor(Math.random() * loserItems.length)];
   await CharacterItemsRepo.transferInstance(pool, pick.id, Body.winnerCharacterId);
 
-  await invalidateCharacterCache(Body.winnerCharacterId);
-  await invalidateCharacterCache(Body.loserCharacterId);
+  await invalidateCharacterCache(redis, Body.winnerCharacterId);
+  await invalidateCharacterCache(redis, Body.loserCharacterId);
 
   return { transferred: { itemInstanceId: pick.id, itemId: pick.item_id } };
 });
