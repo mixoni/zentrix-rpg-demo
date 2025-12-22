@@ -20,6 +20,8 @@ import { getCharacterCache, invalidateCharacterCache, setCharacterCache } from "
 import { getCharacterDetailsCached } from "./services/character.service";
 import { create as createItem, getById as getItemById, listAll as listAllItems } from "./services/items.service";
 import { giftItem as inventoryGiftItem, InventoryGrantItem as inventoryGrantItem } from "./services/inventory.service";
+import { getCharacterSnapshot } from "./services/internal/snapshot.service";
+import { resolveDuel } from "./services/internal/duelResolve.service";
 
 
 const env = {
@@ -190,68 +192,33 @@ app.post("/api/items/gift", async (req, reply) => {
   return reply.code(res.status).send(res.body);
 });
 
-
-
-// Snapshot endpoint (used by Combat)
 app.get("/internal/characters/:id/snapshot", async (req, reply) => {
   if (!requireInternal(req, reply, env.INTERNAL_TOKEN)) return;
+
   const id = (req.params as any).id as string;
+  const res = await getCharacterSnapshot(pool, id);
 
-  const character = await CharactersRepo.getInternalWithClassName(pool, id);
-  if (!character) return reply.code(404).send({ error: "NOT_FOUND" });
-
-  const items = await CharacterItemsRepo.listInstancesWithItemsInternal(pool, id);
-
-  const base = {
-    strength: character.base_strength,
-    agility: character.base_agility,
-    intelligence: character.base_intelligence,
-    faith: character.base_faith,
-  };
-  const bonuses = items.map((it: any) => ({
-    strength: it.bonus_strength,
-    agility: it.bonus_agility,
-    intelligence: it.bonus_intelligence,
-    faith: it.bonus_faith,
-  }));
-
-  const calculated = sumStats(base, bonuses);
-
-  return {
-    id: character.id,
-    name: character.name,
-    createdBy: character.created_by,
-    health: character.health,
-    mana: character.mana,
-    className: character.class_name,
-    calculatedStats: calculated,
-    itemInstances: items.map((it: any) => ({ instanceId: it.instance_id, itemId: it.id })),
-  };
+  return reply.code(res.status).send(res.body);
 });
+
 
 // Resolve duel: winner takes a random item instance from loser
 app.post("/internal/duels/resolve", async (req, reply) => {
   if (!requireInternal(req, reply, env.INTERNAL_TOKEN)) return;
 
-  const Body = ResolveDuelSchema.parse(req.body);
+  const body = ResolveDuelSchema.parse(req.body);
 
-  const loserItems = await CharacterItemsRepo.listInstancesForCharacter(pool, Body.loserCharacterId);
+  const res = await resolveDuel({
+    pool,
+    redis,
+    winnerCharacterId: body.winnerCharacterId,
+    loserCharacterId: body.loserCharacterId,
+    duelId: body.duelId,
+  });
 
-  if (loserItems.length === 0) {
-    // nothing to transfer
-    await invalidateCharacterCache(redis, Body.winnerCharacterId);
-    await invalidateCharacterCache(redis, Body.loserCharacterId);
-    return { transferred: null };
-  }
-
-  const pick = loserItems[Math.floor(Math.random() * loserItems.length)];
-  await CharacterItemsRepo.transferInstance(pool, pick.id, Body.winnerCharacterId);
-
-  await invalidateCharacterCache(redis, Body.winnerCharacterId);
-  await invalidateCharacterCache(redis, Body.loserCharacterId);
-
-  return { transferred: { itemInstanceId: pick.id, itemId: pick.item_id } };
+  return reply.code(res.status).send(res.body);
 });
+
 
 // ----
 
