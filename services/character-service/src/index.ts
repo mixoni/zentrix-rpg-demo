@@ -19,6 +19,7 @@ import { ResolveDuelSchema } from "./validation/internal.schemas";
 import { getCharacterCache, invalidateCharacterCache, setCharacterCache } from "./cache/character.cache";
 import { getCharacterDetailsCached } from "./services/character.service";
 import { create as createItem, getById as getItemById, listAll as listAllItems } from "./services/items.service";
+import { giftItem as inventoryGiftItem, InventoryGrantItem as inventoryGrantItem } from "./services/inventory.service";
 
 
 const env = {
@@ -159,17 +160,16 @@ app.post("/api/items/grant", async (req, reply) => {
 
   const body = GrantItemSchema.parse(req.body);
 
-  const chOk = await CharactersRepo.existsById(pool, body.characterId);
-  if (!chOk) return reply.code(404).send({ error: "CHARACTER_NOT_FOUND" });
+  const res = await inventoryGrantItem({
+    pool,
+    redis,
+    characterId: body.characterId,
+    itemId: body.itemId,
+  });
 
-  const itOk = await ItemsRepo.existsById(pool, body.itemId);
-  if (!itOk) return reply.code(404).send({ error: "ITEM_NOT_FOUND" });
-
-  const row = await CharacterItemsRepo.insertInstance(pool, body.characterId, body.itemId);
-  await invalidateCharacterCache(redis, body.characterId);
-
-  return reply.code(201).send({ itemInstanceId: row!.id });
+  return reply.code(res.status).send(res.body);
 });
+
 
 // Gift (transfer) an item instance from one character to another
 app.post("/api/items/gift", async (req, reply) => {
@@ -178,29 +178,18 @@ app.post("/api/items/gift", async (req, reply) => {
 
   const body = GiftItemSchema.parse(req.body);
 
-  const from = await CharactersRepo.getOwner(pool, body.fromCharacterId);
-  if (!from) return reply.code(404).send({ error: "FROM_CHARACTER_NOT_FOUND" });
+  const res = await inventoryGiftItem({
+    pool,
+    redis,
+    user,
+    fromCharacterId: body.fromCharacterId,
+    toCharacterId: body.toCharacterId,
+    itemInstanceId: body.itemInstanceId,
+  });
 
-  const toExists = await CharactersRepo.existsById(pool, body.toCharacterId);
-  if (!toExists) return reply.code(404).send({ error: "TO_CHARACTER_NOT_FOUND" });
-
-  // owner can gift, or GM
-  if (!(user.role === "GameMaster" || user.sub === from.created_by)) {
-    return reply.code(403).send({ error: "FORBIDDEN" });
-  }
-
-  const inst = await CharacterItemsRepo.getInstance(pool, body.itemInstanceId);
-
-  if (!inst) return reply.code(404).send({ error: "ITEM_INSTANCE_NOT_FOUND" });
-  if (inst.character_id !== body.fromCharacterId) return reply.code(400).send({ error: "ITEM_NOT_OWNED_BY_FROM_CHARACTER" });
-
-  await CharacterItemsRepo.transferInstance(pool, body.itemInstanceId, body.toCharacterId);
-
-  await invalidateCharacterCache(redis, body.fromCharacterId);
-  await invalidateCharacterCache(redis, body.toCharacterId);
-
-  return { ok: true };
+  return reply.code(res.status).send(res.body);
 });
+
 
 
 // Snapshot endpoint (used by Combat)
