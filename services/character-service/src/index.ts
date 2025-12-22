@@ -18,6 +18,7 @@ import { CreateItemSchema, GiftItemSchema, GrantItemSchema } from "./validation/
 import { ResolveDuelSchema } from "./validation/internal.schemas";
 import { getCharacterCache, invalidateCharacterCache, setCharacterCache } from "./cache/character.cache";
 import { getCharacterDetailsCached } from "./services/character.service";
+import { create as createItem, getById as getItemById, listAll as listAllItems } from "./services/items.service";
 
 
 const env = {
@@ -37,9 +38,6 @@ const pool = createPool(env.DATABASE_URL);
 const redis = createRedis(env.REDIS_URL);
 
 const app = Fastify({ logger: true });
-
-type AuthedRequest = { user: JwtPayload };
-
 
 
 app.get("/health", async () => ({ ok: true }));
@@ -124,23 +122,9 @@ app.get("/api/items", async (req, reply) => {
   if (!user) return;
   if (!requireRole(user, "GameMaster", reply)) return;
 
-  const items = await ItemsRepo.listAll(pool);
-  return items.map((it: any) => ({
-    id: it.id,
-    baseName: it.base_name,
-    displayName: computeItemDisplayName(it.base_name, {
-      strength: it.bonus_strength,
-      agility: it.bonus_agility,
-      intelligence: it.bonus_intelligence,
-      faith: it.bonus_faith,
-    }),
-    description: it.description,
-    bonusStrength: it.bonus_strength,
-    bonusAgility: it.bonus_agility,
-    bonusIntelligence: it.bonus_intelligence,
-    bonusFaith: it.bonus_faith,
-  }));
+  return listAllItems(pool);
 });
+
 
 // Create item (GM only - sensible default for a game admin)
 app.post("/api/items", async (req, reply) => {
@@ -149,18 +133,11 @@ app.post("/api/items", async (req, reply) => {
   if (!requireRole(user, "GameMaster", reply)) return;
 
   const body = CreateItemSchema.parse(req.body);
+  const res = await createItem(pool, body);
 
-  const row = await ItemsRepo.insert(pool, {
-    baseName: body.baseName,
-    description: body.description,
-    bonusStrength: body.bonusStrength,
-    bonusAgility: body.bonusAgility,
-    bonusIntelligence: body.bonusIntelligence,
-    bonusFaith: body.bonusFaith,
-  });
-
-  return reply.code(201).send({ id: row!.id });
+  return reply.code(res.status).send(res.body);
 });
+
 
 // Get item details (public to authenticated users)
 app.get("/api/items/:id", async (req, reply) => {
@@ -168,27 +145,11 @@ app.get("/api/items/:id", async (req, reply) => {
   if (!user) return;
 
   const id = (req.params as any).id as string;
-  const it = await ItemsRepo.getById(pool, id);
-  if (!it) return reply.code(404).send({ error: "NOT_FOUND" });
+  const res = await getItemById(pool, id);
 
-  const displayName = computeItemDisplayName(it.base_name, {
-    strength: it.bonus_strength,
-    agility: it.bonus_agility,
-    intelligence: it.bonus_intelligence,
-    faith: it.bonus_faith,
-  });
-
-  return {
-    id: it.id,
-    baseName: it.base_name,
-    displayName,
-    description: it.description,
-    bonusStrength: it.bonus_strength,
-    bonusAgility: it.bonus_agility,
-    bonusIntelligence: it.bonus_intelligence,
-    bonusFaith: it.bonus_faith,
-  };
+  return reply.code(res.status).send(res.body);
 });
+
 
 // Grant an item to a character (GM only)
 app.post("/api/items/grant", async (req, reply) => {
