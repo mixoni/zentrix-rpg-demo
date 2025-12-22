@@ -2,10 +2,11 @@ import "dotenv/config";
 import Fastify from "fastify";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { createPool, queryOne } from "./db";
+import { createPool } from "./db";
 import { runMigrations } from "./migrations";
 import { signJwt, Role } from "./jwt";
 import path from "node:path";
+import * as UsersRepo from "./repos/users.repo";
 
 const env = {
   PORT: Number(process.env.PORT ?? 3001),
@@ -39,11 +40,11 @@ app.post("/api/register", async (req, reply) => {
   const password_hash = await bcrypt.hash(body.password, 10);
 
   try {
-    const row = await queryOne<{ id: string }>(
-      pool,
-      "INSERT INTO users(username, password_hash, role) VALUES($1,$2,$3) RETURNING id",
-      [body.username, password_hash, role]
-    );
+    const row = await UsersRepo.insert(pool, {
+      username: body.username,
+      passwordHash: password_hash,
+      role,
+    });
     return reply.code(201).send({ id: row!.id, username: body.username, role });
   } catch (e: any) {
     if (String(e?.message ?? "").includes("duplicate")) {
@@ -56,11 +57,7 @@ app.post("/api/register", async (req, reply) => {
 
 app.post("/api/login", async (req, reply) => {
   const body = LoginSchema.parse(req.body);
-  const user = await queryOne<{ id: string; username: string; password_hash: string; role: Role }>(
-    pool,
-    "SELECT id, username, password_hash, role FROM users WHERE username=$1",
-    [body.username]
-  );
+  const user = await UsersRepo.findByUsername(pool, body.username);
 
   if (!user) return reply.code(401).send({ error: "INVALID_CREDENTIALS" });
 
@@ -74,11 +71,7 @@ app.post("/api/login", async (req, reply) => {
 // Minimal internal endpoint (optional) if you want to validate user existence by ID later
 app.get("/internal/users/:id", async (req, reply) => {
   const id = (req.params as any).id as string;
-  const user = await queryOne<{ id: string; username: string; role: Role }>(
-    pool,
-    "SELECT id, username, role FROM users WHERE id=$1",
-    [id]
-  );
+  const user = await UsersRepo.findById(pool, id);
   if (!user) return reply.code(404).send({ error: "NOT_FOUND" });
   return user;
 });
