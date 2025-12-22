@@ -86,6 +86,7 @@ services:
       JWT_SECRET: "dev_secret_change_me"
       CHARACTER_SERVICE_URL: "http://character-service:3002"
       INTERNAL_TOKEN: "dev_internal_token_change_me"
+      DUEL_TIMEOUT_MS: 30000
     depends_on:
       postgres_combat:
         condition: service_healthy

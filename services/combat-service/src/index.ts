@@ -15,6 +15,8 @@ const env = {
   INTERNAL_TOKEN: process.env.INTERNAL_TOKEN ?? "",
 };
 
+const DUEL_TIMEOUT_MS = Number(process.env.DUEL_TIMEOUT_MS ?? 5 * 60 * 1000);
+
 if (!env.DATABASE_URL) throw new Error("DATABASE_URL is required");
 if (!env.JWT_SECRET) throw new Error("JWT_SECRET is required");
 if (!env.CHARACTER_SERVICE_URL) throw new Error("CHARACTER_SERVICE_URL is required");
@@ -57,7 +59,7 @@ function secondsBetween(a: Date | null, b: Date) {
 }
 
 function duelExpired(startedAt: Date) {
-  return (Date.now() - startedAt.getTime()) > 5 * 60 * 1000;
+  return (Date.now() - startedAt.getTime()) > DUEL_TIMEOUT_MS;
 }
 
 async function loadDuel(duelId: string) {
@@ -157,13 +159,29 @@ async function applyAction(duelId: string, action: "attack"|"cast"|"heal", actor
   const duel = await loadDuel(duelId);
   if (!duel) return { status: 404, body: { error: "DUEL_NOT_FOUND" } };
 
-  if (duel.status !== "Active") return { status: 400, body: { error: "DUEL_NOT_ACTIVE" } };
+  if (duel.status !== "Active")
+    return {
+      status: 409,
+      body: {
+        error: "DUEL_NOT_ACTIVE",
+        message: "Duel is no longer active"
+      }
+    };
+  
 
   const startedAt = new Date(duel.started_at);
   if (duelExpired(startedAt)) {
     await finishDuel(duel, null);
-    return { status: 200, body: { status: "Draw" } };
+    return {
+      status: 409,
+      body: {
+        status: "Draw",
+        reason: "TIMEOUT",
+        message: "Duel has expired and can no longer accept actions"
+      }
+    };
   }
+  
 
   const isChallenger = actorIsChallenger(duel, actorId);
 

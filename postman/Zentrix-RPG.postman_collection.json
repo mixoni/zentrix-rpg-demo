@@ -351,6 +351,34 @@
 							"if (!a || !b) {\r",
 							"  throw new Error(\"Missing charA/charB. Create two characters first and save their IDs.\");\r",
 							"}\r",
+							"\r",
+							"\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Challenge created successfully\", function () {\r",
+							"  pm.response.to.have.status(201);\r",
+							"});\r",
+							"\r",
+							"const json = pm.response.json();\r",
+							"\r",
+							"pm.test(\"duelId exists in response\", function () {\r",
+							"  pm.expect(json).to.have.property(\"duelId\");\r",
+							"  pm.expect(json.duelId).to.be.a(\"string\").and.not.empty;\r",
+							"});\r",
+							"\r",
+							"// overwrite duelId every time\r",
+							"pm.collectionVariables.set(\"duelId\", json.duelId);\r",
+							"\r",
+							"console.log(\"✅ duelId updated:\", json.duelId);\r",
 							""
 						],
 						"type": "text/javascript",
@@ -393,6 +421,43 @@
 					"path": [
 						"api",
 						"challenge"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Combat - Attack",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"actorCharacterId\": \"{{charA}}\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{combatUrl}}/api/{{duelId}}/attack",
+					"host": [
+						"{{combatUrl}}"
+					],
+					"path": [
+						"api",
+						"{{duelId}}",
+						"attack"
 					]
 				}
 			},
