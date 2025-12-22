@@ -17,6 +17,7 @@ import { CreateCharacterSchema } from "./validation/character.schemas";
 import { CreateItemSchema, GiftItemSchema, GrantItemSchema } from "./validation/items.schemas";
 import { ResolveDuelSchema } from "./validation/internal.schemas";
 import { getCharacterCache, invalidateCharacterCache, setCharacterCache } from "./cache/character.cache";
+import { getCharacterDetailsCached } from "./services/character.service";
 
 
 const env = {
@@ -70,66 +71,19 @@ app.get("/api/character", async (req, reply) => {
 app.get("/api/character/:id", async (req, reply) => {
   const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
+
   const id = (req.params as any).id as string;
 
-  // cache key
-  const key = `character:${id}:details`;
-  const cached = await getCharacterCache(redis,key);
-  if (cached) return JSON.parse(cached);
+  const res = await getCharacterDetailsCached({
+    pool,
+    redis,
+    characterId: id,
+    user,
+  });
 
-  const character = await CharactersRepo.getDetailsWithClass(pool, id);
-  if (!character) return reply.code(404).send({ error: "NOT_FOUND" });
-
-  if (!isOwnerOrGM(user, character.created_by)) return reply.code(403).send({ error: "FORBIDDEN" });
-
-  const items = await CharacterItemsRepo.listInstancesWithItems(pool, id);
-
-  const base = {
-    strength: character.base_strength,
-    agility: character.base_agility,
-    intelligence: character.base_intelligence,
-    faith: character.base_faith,
-  };
-
-  const bonuses = items.map((it: any) => ({
-    strength: it.bonus_strength,
-    agility: it.bonus_agility,
-    intelligence: it.bonus_intelligence,
-    faith: it.bonus_faith,
-  }));
-
-  const calculated = sumStats(base, bonuses);
-
-  const result = {
-    id: character.id,
-    name: character.name,
-    health: character.health,
-    mana: character.mana,
-    createdBy: character.created_by,
-    class: { id: character.class_id, name: character.class_name, description: character.class_description },
-    baseStats: base,
-    calculatedStats: calculated,
-    items: items.map((it: any) => ({
-      instanceId: it.instance_id,
-      id: it.id,
-      baseName: it.base_name,
-      displayName: computeItemDisplayName(it.base_name, {
-        strength: it.bonus_strength,
-        agility: it.bonus_agility,
-        intelligence: it.bonus_intelligence,
-        faith: it.bonus_faith,
-      }),
-      description: it.description,
-      bonusStrength: it.bonus_strength,
-      bonusAgility: it.bonus_agility,
-      bonusIntelligence: it.bonus_intelligence,
-      bonusFaith: it.bonus_faith,
-    })),
-  };
-
-  await setCharacterCache(redis,key, JSON.stringify(result));
-  return result;
+  return reply.code(res.status).send(res.body);
 });
+
 
 // Create a new character (any authenticated user)
 app.post("/api/character", async (req, reply) => {
