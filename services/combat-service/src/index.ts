@@ -6,6 +6,8 @@ import { createPool, queryOne } from "./db";
 import { runMigrations } from "./migrations";
 import { getBearerToken, verifyJwt, JwtPayload } from "./jwt";
 import { createCharacterClient } from "./characterClient";
+import * as DuelsRepo from "./repos/duels.repo";
+
 
 const env = {
   PORT: Number(process.env.PORT ?? 3003),
@@ -63,8 +65,7 @@ function duelExpired(startedAt: Date) {
 }
 
 async function loadDuel(duelId: string) {
-  const d = await queryOne<any>(pool, "SELECT * FROM duels WHERE id=$1", [duelId]);
-  return d;
+  return DuelsRepo.getById(pool, duelId);
 }
 
 function actorIsChallenger(duel: any, actorId: string) {
@@ -95,11 +96,7 @@ function getStats(isChallenger: boolean, duel: any) {
 }
 
 async function finishDuel(duel: any, winnerCharacterId: string | null) {
-  const status = winnerCharacterId ? "Finished" : "Draw";
-  await pool.query(
-    "UPDATE duels SET status=$1, ended_at=NOW(), winner_character_id=$2 WHERE id=$3",
-    [status, winnerCharacterId, duel.id]
-  );
+  await DuelsRepo.finish(pool, duel.id, winnerCharacterId);
 }
 
 app.post("/api/challenge", async (req, reply) => {
@@ -121,21 +118,25 @@ app.post("/api/challenge", async (req, reply) => {
   const os = opponentSnap.calculatedStats;
 
   // Use snapshot health as starting HP
-  const row = await queryOne<{ id: string }>(
-    pool,
-    `INSERT INTO duels(
-      challenger_character_id, opponent_character_id, challenger_user_id,
-      challenger_strength, challenger_agility, challenger_intelligence, challenger_faith,
-      opponent_strength, opponent_agility, opponent_intelligence, opponent_faith,
-      challenger_hp, opponent_hp
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
-    [
-      body.challengerCharacterId, body.opponentCharacterId, user.sub,
-      cs.strength, cs.agility, cs.intelligence, cs.faith,
-      os.strength, os.agility, os.intelligence, os.faith,
-      challengerSnap.health, opponentSnap.health
-    ]
-  );
+  const row = await DuelsRepo.create(pool, {
+    challengerCharacterId: body.challengerCharacterId,
+    opponentCharacterId: body.opponentCharacterId,
+    challengerUserId: user.sub,
+  
+    challengerStrength: cs.strength,
+    challengerAgility: cs.agility,
+    challengerIntelligence: cs.intelligence,
+    challengerFaith: cs.faith,
+  
+    opponentStrength: os.strength,
+    opponentAgility: os.agility,
+    opponentIntelligence: os.intelligence,
+    opponentFaith: os.faith,
+  
+    challengerHp: challengerSnap.health,
+    opponentHp: opponentSnap.health,
+  });
+  
 
   return reply.code(201).send({ duelId: row!.id });
 });
@@ -214,21 +215,18 @@ async function applyAction(duelId: string, action: "attack"|"cast"|"heal", actor
     newEnemyHp = Math.max(0, newEnemyHp - amount);
   }
 
-  await pool.query("BEGIN");
-  try {
-    await pool.query(
-      `UPDATE duels SET ${hpField}=$1, ${enemyHpField}=$2, ${cooldownField}=NOW() WHERE id=$3`,
-      [newSelfHp, newEnemyHp, duelId]
-    );
-    await pool.query(
-      "INSERT INTO duel_actions(duel_id, actor_character_id, action_type, amount) VALUES($1,$2,$3,$4)",
-      [duelId, actorId, action, amount]
-    );
-    await pool.query("COMMIT");
-  } catch (e) {
-    await pool.query("ROLLBACK");
-    throw e;
-  }
+  await DuelsRepo.applyActionTx(pool, {
+    duelId,
+    hpFieldSql: hpField,
+    enemyHpFieldSql: enemyHpField,
+    cooldownFieldSql: cooldownField,
+    newSelfHp,
+    newEnemyHp,
+    actorId,
+    action,
+    amount,
+  });
+  
 
   // check win
   if (action !== "heal" && newEnemyHp === 0) {
