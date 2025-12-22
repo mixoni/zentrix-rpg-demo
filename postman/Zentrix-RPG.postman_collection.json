@@ -1,241 +1,464 @@
 {
-  "info": {
-    "name": "Zentrix-RPG",
-    "_postman_id": "f4e8b1b4-6d64-4b4e-9b79-0f1e9b2c8b1a",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "variable": [
-    {
-      "key": "accountUrl",
-      "value": "http://localhost:3001"
-    },
-    {
-      "key": "characterUrl",
-      "value": "http://localhost:3002"
-    },
-    {
-      "key": "combatUrl",
-      "value": "http://localhost:3003"
-    },
-    {
-      "key": "userToken",
-      "value": ""
-    },
-    {
-      "key": "gmToken",
-      "value": ""
-    },
-    {
-      "key": "classId",
-      "value": ""
-    },
-    {
-      "key": "itemId",
-      "value": ""
-    },
-    {
-      "key": "charA",
-      "value": ""
-    },
-    {
-      "key": "charB",
-      "value": ""
-    },
-    {
-      "key": "duelId",
-      "value": ""
-    },
-    {
-      "key": "itemInstanceId",
-      "value": ""
-    }
-  ],
-  "item": [
-    {
-      "name": "Account - Register User",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{accountUrl}}/api/register",
-          "host": [
-            "{{accountUrl}}"
-          ],
-          "path": [
-            "api",
-            "register"
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"username\": \"user1\",\n  \"password\": \"password123\",\n  \"role\": \"User\"\n}"
-        }
-      }
-    },
-    {
-      "name": "Account - Register GM",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{accountUrl}}/api/register",
-          "host": [
-            "{{accountUrl}}"
-          ],
-          "path": [
-            "api",
-            "register"
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"username\": \"gm1\",\n  \"password\": \"password123\",\n  \"role\": \"GameMaster\"\n}"
-        }
-      }
-    },
-    {
-      "name": "Account - Login User (set userToken manually from response)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{accountUrl}}/api/login",
-          "host": [
-            "{{accountUrl}}"
-          ],
-          "path": [
-            "api",
-            "login"
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"username\": \"user1\",\n  \"password\": \"password123\"\n}"
-        }
-      }
-    },
-    {
-      "name": "Account - Login GM (set gmToken manually from response)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{accountUrl}}/api/login",
-          "host": [
-            "{{accountUrl}}"
-          ],
-          "path": [
-            "api",
-            "login"
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"username\": \"gm1\",\n  \"password\": \"password123\"\n}"
-        }
-      }
-    },
-    {
-      "name": "Character - GM list items",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{gmToken}}"
-          }
-        ],
-        "url": {
-          "raw": "{{characterUrl}}/api/items",
-          "host": [
-            "{{characterUrl}}"
-          ],
-          "path": [
-            "api",
-            "items"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Character - Create character A (User)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{userToken}}"
-          }
-        ],
-        "url": {
-          "raw": "{{characterUrl}}/api/character",
-          "host": [
-            "{{characterUrl}}"
-          ],
-          "path": [
-            "api",
-            "character"
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"HeroA\",\n  \"classId\": \"(get from DB or seed; see README)\",\n  \"health\": 100,\n  \"mana\": 50,\n  \"baseStrength\": 5,\n  \"baseAgility\": 5,\n  \"baseIntelligence\": 2,\n  \"baseFaith\": 1\n}"
-        }
-      }
-    },
-    {
-      "name": "Combat - Challenge (requires char IDs)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{userToken}}"
-          }
-        ],
-        "url": {
-          "raw": "{{combatUrl}}/api/challenge",
-          "host": [
-            "{{combatUrl}}"
-          ],
-          "path": [
-            "api",
-            "challenge"
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"challengerCharacterId\": \"{{charA}}\",\n  \"opponentCharacterId\": \"{{charB}}\"\n}"
-        }
-      }
-    }
-  ]
+	"info": {
+		"_postman_id": "c92b8499-77d7-492e-aae0-770ef445b744",
+		"name": "Zentrix-RPG",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "5109986"
+	},
+	"item": [
+		{
+			"name": "Account - Register User",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"user1\",\n  \"password\": \"password123\",\n  \"role\": \"User\"\n}"
+				},
+				"url": {
+					"raw": "{{accountUrl}}/api/register",
+					"host": [
+						"{{accountUrl}}"
+					],
+					"path": [
+						"api",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Account - Register GM",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"gm1\",\n  \"password\": \"password123\",\n  \"role\": \"GameMaster\"\n}"
+				},
+				"url": {
+					"raw": "{{accountUrl}}/api/register",
+					"host": [
+						"{{accountUrl}}"
+					],
+					"path": [
+						"api",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Account - Login User (set userToken manually from response)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Login User: status 200\", function () {\r",
+							"  pm.response.to.have.status(200);\r",
+							"});\r",
+							"\r",
+							"const json = pm.response.json();\r",
+							"\r",
+							"pm.test(\"Login User: token exists\", function () {\r",
+							"  pm.expect(json).to.have.property(\"token\");\r",
+							"  pm.expect(json.token).to.be.a(\"string\").and.not.empty;\r",
+							"});\r",
+							"\r",
+							"// Save token to collection variable\r",
+							"pm.collectionVariables.set(\"userToken\", json.token);\r",
+							"\r",
+							"if (json.user?.id) pm.collectionVariables.set(\"userId\", json.user.id);\r",
+							"if (json.user?.role) pm.collectionVariables.set(\"userRole\", json.user.role);\r",
+							"\r",
+							"console.log(\"✅ userToken saved to collection variables\");\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"user1\",\n  \"password\": \"password123\"\n}"
+				},
+				"url": {
+					"raw": "{{accountUrl}}/api/login",
+					"host": [
+						"{{accountUrl}}"
+					],
+					"path": [
+						"api",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Account - Login GM (set gmToken manually from response)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Login GM: status 200\", function () {\r",
+							"  pm.response.to.have.status(200);\r",
+							"});\r",
+							"\r",
+							"const json = pm.response.json();\r",
+							"\r",
+							"pm.test(\"Login GM: token exists\", function () {\r",
+							"  pm.expect(json).to.have.property(\"token\");\r",
+							"  pm.expect(json.token).to.be.a(\"string\").and.not.empty;\r",
+							"});\r",
+							"\r",
+							"// Save token to collection variable\r",
+							"pm.collectionVariables.set(\"gmToken\", json.token);\r",
+							"\r",
+							"if (json.user?.id) pm.collectionVariables.set(\"gmId\", json.user.id);\r",
+							"if (json.user?.role) pm.collectionVariables.set(\"gmRole\", json.user.role);\r",
+							"\r",
+							"console.log(\"✅ gmToken saved to collection variables\");\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"gm1\",\n  \"password\": \"password123\"\n}"
+				},
+				"url": {
+					"raw": "{{accountUrl}}/api/login",
+					"host": [
+						"{{accountUrl}}"
+					],
+					"path": [
+						"api",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Character - GM list items",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{gmToken}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{gmToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{characterUrl}}/api/items",
+					"host": [
+						"{{characterUrl}}"
+					],
+					"path": [
+						"api",
+						"items"
+					],
+					"query": [
+						{
+							"key": "Authorization",
+							"value": "Bearer {{userToken}}",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Character - Create character heroA (User)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Create HeroA: status 201\", () => pm.response.to.have.status(201));\r",
+							"\r",
+							"const json = pm.response.json();\r",
+							"pm.expect(json).to.have.property(\"id\");\r",
+							"\r",
+							"pm.collectionVariables.set(\"charA\", json.id);\r",
+							"console.log(\"✅ charA saved:\", json.id);\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{userToken}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"HeroA\",\n  \"classId\": \"a157ccdf-5dab-4ef9-958a-719f2b411400\",\n  \"health\": 100,\n  \"mana\": 50,\n  \"baseStrength\": 5,\n  \"baseAgility\": 5,\n  \"baseIntelligence\": 2,\n  \"baseFaith\": 1\n}"
+				},
+				"url": {
+					"raw": "{{characterUrl}}/api/character",
+					"host": [
+						"{{characterUrl}}"
+					],
+					"path": [
+						"api",
+						"character"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Character - Create character heroB (User)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Create HeroB: status 201\", () => pm.response.to.have.status(201));\r",
+							"\r",
+							"const json = pm.response.json();\r",
+							"pm.expect(json).to.have.property(\"id\");\r",
+							"\r",
+							"pm.collectionVariables.set(\"charB\", json.id);\r",
+							"console.log(\"✅ charB saved:\", json.id);\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{userToken}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"HeroB\",\n  \"classId\": \"3ecbf895-5919-40ba-b2fb-080c09ff845a\",\n  \"health\": 100,\n  \"mana\": 50,\n  \"baseStrength\": 5,\n  \"baseAgility\": 5,\n  \"baseIntelligence\": 2,\n  \"baseFaith\": 1\n}"
+				},
+				"url": {
+					"raw": "{{characterUrl}}/api/character",
+					"host": [
+						"{{characterUrl}}"
+					],
+					"path": [
+						"api",
+						"character"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Combat - Challenge (requires char IDs)",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"const a = pm.collectionVariables.get(\"charA\");\r",
+							"const b = pm.collectionVariables.get(\"charB\");\r",
+							"\r",
+							"if (!a || !b) {\r",
+							"  throw new Error(\"Missing charA/charB. Create two characters first and save their IDs.\");\r",
+							"}\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{userToken}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{userToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"challengerCharacterId\": \"{{charA}}\",\n  \"opponentCharacterId\": \"{{charB}}\"\n}"
+				},
+				"url": {
+					"raw": "{{combatUrl}}/api/challenge",
+					"host": [
+						"{{combatUrl}}"
+					],
+					"path": [
+						"api",
+						"challenge"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "accountUrl",
+			"value": "http://localhost:3001"
+		},
+		{
+			"key": "characterUrl",
+			"value": "http://localhost:3002"
+		},
+		{
+			"key": "combatUrl",
+			"value": "http://localhost:3003"
+		},
+		{
+			"key": "userToken",
+			"value": ""
+		},
+		{
+			"key": "gmToken",
+			"value": ""
+		},
+		{
+			"key": "classId",
+			"value": ""
+		},
+		{
+			"key": "itemId",
+			"value": ""
+		},
+		{
+			"key": "charA",
+			"value": ""
+		},
+		{
+			"key": "charB",
+			"value": ""
+		},
+		{
+			"key": "duelId",
+			"value": ""
+		},
+		{
+			"key": "itemInstanceId",
+			"value": ""
+		},
+		{
+			"key": "userId",
+			"value": ""
+		},
+		{
+			"key": "userRole",
+			"value": ""
+		},
+		{
+			"key": "gmId",
+			"value": ""
+		},
+		{
+			"key": "gmRole",
+			"value": ""
+		}
+	]
 }
