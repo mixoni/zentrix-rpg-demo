@@ -1,27 +1,14 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import path from "node:path";
-import { createPool, queryMany, queryOne } from "./db";
+import { createPool } from "./db";
 import { runMigrations } from "./migrations";
-import { getBearerToken, verifyJwt, Role, JwtPayload } from "./jwt";
 import { createRedis } from "./cache";
-import { computeItemDisplayName, sumStats } from "./logic";
-
 import * as ClassesRepo from "./repos/classes.repo";
-import * as CharactersRepo from "./repos/characters.repo";
 import * as ItemsRepo from "./repos/items.repo";
-import * as CharacterItemsRepo from "./repos/character-items.repo";
-import { requireAuth, requireRole, isOwnerOrGM } from "./auth/auth";
-import { requireInternal } from "./auth/auth-internal";
-import { CreateCharacterSchema } from "./validation/character.schemas";
-import { CreateItemSchema, GiftItemSchema, GrantItemSchema } from "./validation/items.schemas";
-import { ResolveDuelSchema } from "./validation/internal.schemas";
-import { getCharacterCache, invalidateCharacterCache, setCharacterCache } from "./cache/character.cache";
-import { getCharacterDetailsCached } from "./services/character.service";
-import { create as createItem, getById as getItemById, listAll as listAllItems } from "./services/items.service";
-import { giftItem as inventoryGiftItem, InventoryGrantItem as inventoryGrantItem } from "./services/inventory.service";
-import { getCharacterSnapshot } from "./services/internal/snapshot.service";
-import { resolveDuel } from "./services/internal/duelResolve.service";
+import { registerCharacterRoutes } from "./routes/character.routes";
+import { registerItemsRoutes } from "./routes/items.routes";
+import { registerInternalRoutes } from "./routes/internal.routes";
 
 
 const env = {
@@ -40,12 +27,17 @@ if (!env.INTERNAL_TOKEN) throw new Error("INTERNAL_TOKEN is required");
 const pool = createPool(env.DATABASE_URL);
 const redis = createRedis(env.REDIS_URL);
 
-const app = Fastify({ logger: true });
+const deps = {
+  pool,
+  redis,
+  jwtSecret: env.JWT_SECRET,
+  internalToken: env.INTERNAL_TOKEN,
+};
 
+const app = Fastify({ logger: true });
 
 app.get("/health", async () => ({ ok: true }));
 
-/** Seed initial data (classes + a few items) if empty */
 async function seedIfNeeded() {
   const cnt = await ClassesRepo.count(pool);
   if (cnt > 0) return;
@@ -56,175 +48,14 @@ async function seedIfNeeded() {
   app.log.info("Seeded initial classes and items");
 }
 
-// ---- Endpoints
-
-// GM only: list all characters with name, health, mana
-app.get("/api/character", async (req, reply) => {
-  const user = requireAuth(req, reply, env.JWT_SECRET);
-  if (!user) return;
-  if (!requireRole(user, "GameMaster", reply)) return;
-
-  const rows = await CharactersRepo.listForGM(pool);
-  return rows;
-});
-
-// Get character details (owner or GM) - cached
-app.get("/api/character/:id", async (req, reply) => {
-  const user = requireAuth(req, reply, env.JWT_SECRET);
-  if (!user) return;
-
-  const id = (req.params as any).id as string;
-
-  const res = await getCharacterDetailsCached({
-    pool,
-    redis,
-    characterId: id,
-    user,
-  });
-
-  return reply.code(res.status).send(res.body);
-});
-
-
-// Create a new character (any authenticated user)
-app.post("/api/character", async (req, reply) => {
-  const user = requireAuth(req, reply, env.JWT_SECRET);
-  if (!user) return;
-
-  const body = CreateCharacterSchema.parse(req.body);
-
-  // validate class exists
-  const ok = await ClassesRepo.existsById(pool, body.classId);
-  if (!ok) return reply.code(400).send({ error: "INVALID_CLASS" });
-
-  try {
-    const row = await CharactersRepo.insert(pool, {
-      name: body.name,
-      health: body.health,
-      mana: body.mana,
-      baseStrength: body.baseStrength,
-      baseAgility: body.baseAgility,
-      baseIntelligence: body.baseIntelligence,
-      baseFaith: body.baseFaith,
-      classId: body.classId,
-      createdBy: user.sub,
-    });
-    return reply.code(201).send({ id: row!.id });
-  } catch (e: any) {
-    if (String(e?.message ?? "").includes("duplicate")) {
-      return reply.code(409).send({ error: "CHARACTER_NAME_TAKEN" });
-    }
-    req.log.error(e);
-    return reply.code(500).send({ error: "INTERNAL_ERROR" });
-  }
-});
-
-// GM only: list all items
-app.get("/api/items", async (req, reply) => {
-  const user = requireAuth(req, reply, env.JWT_SECRET);
-  if (!user) return;
-  if (!requireRole(user, "GameMaster", reply)) return;
-
-  return listAllItems(pool);
-});
-
-
-// Create item (GM only - sensible default for a game admin)
-app.post("/api/items", async (req, reply) => {
-  const user = requireAuth(req, reply, env.JWT_SECRET);
-  if (!user) return;
-  if (!requireRole(user, "GameMaster", reply)) return;
-
-  const body = CreateItemSchema.parse(req.body);
-  const res = await createItem(pool, body);
-
-  return reply.code(res.status).send(res.body);
-});
-
-
-// Get item details (public to authenticated users)
-app.get("/api/items/:id", async (req, reply) => {
-  const user = requireAuth(req, reply, env.JWT_SECRET);
-  if (!user) return;
-
-  const id = (req.params as any).id as string;
-  const res = await getItemById(pool, id);
-
-  return reply.code(res.status).send(res.body);
-});
-
-
-// Grant an item to a character (GM only)
-app.post("/api/items/grant", async (req, reply) => {
-  const user = requireAuth(req, reply, env.JWT_SECRET);
-  if (!user) return;
-  if (!requireRole(user, "GameMaster", reply)) return;
-
-  const body = GrantItemSchema.parse(req.body);
-
-  const res = await inventoryGrantItem({
-    pool,
-    redis,
-    characterId: body.characterId,
-    itemId: body.itemId,
-  });
-
-  return reply.code(res.status).send(res.body);
-});
-
-
-// Gift (transfer) an item instance from one character to another
-app.post("/api/items/gift", async (req, reply) => {
-  const user = requireAuth(req, reply, env.JWT_SECRET);
-  if (!user) return;
-
-  const body = GiftItemSchema.parse(req.body);
-
-  const res = await inventoryGiftItem({
-    pool,
-    redis,
-    user,
-    fromCharacterId: body.fromCharacterId,
-    toCharacterId: body.toCharacterId,
-    itemInstanceId: body.itemInstanceId,
-  });
-
-  return reply.code(res.status).send(res.body);
-});
-
-app.get("/internal/characters/:id/snapshot", async (req, reply) => {
-  if (!requireInternal(req, reply, env.INTERNAL_TOKEN)) return;
-
-  const id = (req.params as any).id as string;
-  const res = await getCharacterSnapshot(pool, id);
-
-  return reply.code(res.status).send(res.body);
-});
-
-
-// Resolve duel: winner takes a random item instance from loser
-app.post("/internal/duels/resolve", async (req, reply) => {
-  if (!requireInternal(req, reply, env.INTERNAL_TOKEN)) return;
-
-  const body = ResolveDuelSchema.parse(req.body);
-
-  const res = await resolveDuel({
-    pool,
-    redis,
-    winnerCharacterId: body.winnerCharacterId,
-    loserCharacterId: body.loserCharacterId,
-    duelId: body.duelId,
-  });
-
-  return reply.code(res.status).send(res.body);
-});
-
-
-// ----
-
 async function main() {
   await runMigrations(pool, path.join(__dirname, "..", "migrations"));
   await seedIfNeeded();
+
+  await registerCharacterRoutes(app, deps);
+  await registerItemsRoutes(app, deps);
+  await registerInternalRoutes(app, deps);
+
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
 }
 
