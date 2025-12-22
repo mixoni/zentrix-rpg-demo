@@ -1,6 +1,5 @@
 import "dotenv/config";
 import Fastify from "fastify";
-import { z } from "zod";
 import path from "node:path";
 import { createPool, queryMany, queryOne } from "./db";
 import { runMigrations } from "./migrations";
@@ -12,6 +11,11 @@ import * as ClassesRepo from "./repos/classes.repo";
 import * as CharactersRepo from "./repos/characters.repo";
 import * as ItemsRepo from "./repos/items.repo";
 import * as CharacterItemsRepo from "./repos/character-items.repo";
+import { requireAuth, requireRole, isOwnerOrGM } from "./auth/auth";
+import { requireInternal } from "./auth/auth-internal";
+import { CreateCharacterSchema } from "./validation/character.schemas";
+import { CreateItemSchema, GiftItemSchema, GrantItemSchema } from "./validation/items.schemas";
+import { ResolveDuelSchema } from "./validation/internal.schemas";
 
 
 const env = {
@@ -34,31 +38,7 @@ const app = Fastify({ logger: true });
 
 type AuthedRequest = { user: JwtPayload };
 
-function requireAuth(req: any, reply: any): JwtPayload | null {
-  const token = getBearerToken(req.headers.authorization);
-  if (!token) {
-    reply.code(401).send({ error: "UNAUTHORIZED" });
-    return null;
-  }
-  try {
-    return verifyJwt(token, env.JWT_SECRET);
-  } catch {
-    reply.code(401).send({ error: "UNAUTHORIZED" });
-    return null;
-  }
-}
 
-function requireRole(user: JwtPayload, role: Role, reply: any) {
-  if (user.role !== role) {
-    reply.code(403).send({ error: "FORBIDDEN" });
-    return false;
-  }
-  return true;
-}
-
-function isOwnerOrGM(user: JwtPayload, ownerId: string) {
-  return user.role === "GameMaster" || user.sub === ownerId;
-}
 
 async function invalidateCharacterCache(characterId: string) {
   await redis.del(`character:${characterId}:details`);
@@ -77,43 +57,11 @@ async function seedIfNeeded() {
   app.log.info("Seeded initial classes and items");
 }
 
-// ---- Schemas
-const CreateCharacterSchema = z.object({
-  name: z.string().min(2).max(50),
-  classId: z.string().uuid(),
-  health: z.number().int().min(1).max(9999),
-  mana: z.number().int().min(0).max(9999),
-  baseStrength: z.number().int().min(0).max(9999),
-  baseAgility: z.number().int().min(0).max(9999),
-  baseIntelligence: z.number().int().min(0).max(9999),
-  baseFaith: z.number().int().min(0).max(9999),
-});
-
-const CreateItemSchema = z.object({
-  baseName: z.string().min(2).max(100),
-  description: z.string().min(1).max(500),
-  bonusStrength: z.number().int().min(0).max(9999).default(0),
-  bonusAgility: z.number().int().min(0).max(9999).default(0),
-  bonusIntelligence: z.number().int().min(0).max(9999).default(0),
-  bonusFaith: z.number().int().min(0).max(9999).default(0),
-});
-
-const GrantItemSchema = z.object({
-  characterId: z.string().uuid(),
-  itemId: z.string().uuid(),
-});
-
-const GiftItemSchema = z.object({
-  fromCharacterId: z.string().uuid(),
-  toCharacterId: z.string().uuid(),
-  itemInstanceId: z.string().uuid(),
-});
-
 // ---- Endpoints
 
 // GM only: list all characters with name, health, mana
 app.get("/api/character", async (req, reply) => {
-  const user = requireAuth(req, reply);
+  const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
   if (!requireRole(user, "GameMaster", reply)) return;
 
@@ -123,7 +71,7 @@ app.get("/api/character", async (req, reply) => {
 
 // Get character details (owner or GM) - cached
 app.get("/api/character/:id", async (req, reply) => {
-  const user = requireAuth(req, reply);
+  const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
   const id = (req.params as any).id as string;
 
@@ -188,7 +136,7 @@ app.get("/api/character/:id", async (req, reply) => {
 
 // Create a new character (any authenticated user)
 app.post("/api/character", async (req, reply) => {
-  const user = requireAuth(req, reply);
+  const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
 
   const body = CreateCharacterSchema.parse(req.body);
@@ -221,7 +169,7 @@ app.post("/api/character", async (req, reply) => {
 
 // GM only: list all items
 app.get("/api/items", async (req, reply) => {
-  const user = requireAuth(req, reply);
+  const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
   if (!requireRole(user, "GameMaster", reply)) return;
 
@@ -245,7 +193,7 @@ app.get("/api/items", async (req, reply) => {
 
 // Create item (GM only - sensible default for a game admin)
 app.post("/api/items", async (req, reply) => {
-  const user = requireAuth(req, reply);
+  const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
   if (!requireRole(user, "GameMaster", reply)) return;
 
@@ -265,7 +213,7 @@ app.post("/api/items", async (req, reply) => {
 
 // Get item details (public to authenticated users)
 app.get("/api/items/:id", async (req, reply) => {
-  const user = requireAuth(req, reply);
+  const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
 
   const id = (req.params as any).id as string;
@@ -293,7 +241,7 @@ app.get("/api/items/:id", async (req, reply) => {
 
 // Grant an item to a character (GM only)
 app.post("/api/items/grant", async (req, reply) => {
-  const user = requireAuth(req, reply);
+  const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
   if (!requireRole(user, "GameMaster", reply)) return;
 
@@ -313,7 +261,7 @@ app.post("/api/items/grant", async (req, reply) => {
 
 // Gift (transfer) an item instance from one character to another
 app.post("/api/items/gift", async (req, reply) => {
-  const user = requireAuth(req, reply);
+  const user = requireAuth(req, reply, env.JWT_SECRET);
   if (!user) return;
 
   const body = GiftItemSchema.parse(req.body);
@@ -342,20 +290,10 @@ app.post("/api/items/gift", async (req, reply) => {
   return { ok: true };
 });
 
-// ---- Internal endpoints for Combat Service (secured with X-Internal-Token)
-
-function requireInternal(req: any, reply: any) {
-  const token = req.headers["x-internal-token"];
-  if (!token || token !== env.INTERNAL_TOKEN) {
-    reply.code(401).send({ error: "UNAUTHORIZED_INTERNAL" });
-    return false;
-  }
-  return true;
-}
 
 // Snapshot endpoint (used by Combat)
 app.get("/internal/characters/:id/snapshot", async (req, reply) => {
-  if (!requireInternal(req, reply)) return;
+  if (!requireInternal(req, reply, env.INTERNAL_TOKEN)) return;
   const id = (req.params as any).id as string;
 
   const character = await CharactersRepo.getInternalWithClassName(pool, id);
@@ -392,13 +330,9 @@ app.get("/internal/characters/:id/snapshot", async (req, reply) => {
 
 // Resolve duel: winner takes a random item instance from loser
 app.post("/internal/duels/resolve", async (req, reply) => {
-  if (!requireInternal(req, reply)) return;
+  if (!requireInternal(req, reply, env.INTERNAL_TOKEN)) return;
 
-  const Body = z.object({
-    duelId: z.string().uuid().optional(),
-    winnerCharacterId: z.string().uuid(),
-    loserCharacterId: z.string().uuid(),
-  }).parse(req.body);
+  const Body = ResolveDuelSchema.parse(req.body);
 
   const loserItems = await CharacterItemsRepo.listInstancesForCharacter(pool, Body.loserCharacterId);
 
