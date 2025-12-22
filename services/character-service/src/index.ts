@@ -8,6 +8,12 @@ import { getBearerToken, verifyJwt, Role, JwtPayload } from "./jwt";
 import { createRedis } from "./cache";
 import { computeItemDisplayName, sumStats } from "./logic";
 
+import * as ClassesRepo from "./repos/classes.repo";
+import * as CharactersRepo from "./repos/characters.repo";
+import * as ItemsRepo from "./repos/items.repo";
+import * as CharacterItemsRepo from "./repos/character-items.repo";
+
+
 const env = {
   PORT: Number(process.env.PORT ?? 3002),
   DATABASE_URL: process.env.DATABASE_URL ?? "",
@@ -62,22 +68,11 @@ app.get("/health", async () => ({ ok: true }));
 
 /** Seed initial data (classes + a few items) if empty */
 async function seedIfNeeded() {
-  const c = await queryOne<{ cnt: string }>(pool, "SELECT COUNT(*)::text as cnt FROM classes");
-  if (c && Number(c.cnt) > 0) return;
+  const cnt = await ClassesRepo.count(pool);
+  if (cnt > 0) return;
 
-  await pool.query("INSERT INTO classes(name, description) VALUES ($1,$2), ($3,$4)",
-    ["Warrior","Frontline fighter", "Rogue","Fast and deadly"]
-  );
-
-  await pool.query(
-    `INSERT INTO items(base_name, description, bonus_strength, bonus_agility, bonus_intelligence, bonus_faith)
-     VALUES
-      ('Iron Sword','A basic sword', 3,0,0,0),
-      ('Swift Dagger','Quick strikes', 0,3,0,0),
-      ('Apprentice Tome','Arcane knowledge', 0,0,3,0),
-      ('Cleric Charm','Blessed relic', 0,0,0,3)
-    `
-  );
+  await ClassesRepo.seedInitial(pool);
+  await ItemsRepo.seedInitial(pool);
 
   app.log.info("Seeded initial classes and items");
 }
@@ -122,10 +117,7 @@ app.get("/api/character", async (req, reply) => {
   if (!user) return;
   if (!requireRole(user, "GameMaster", reply)) return;
 
-  const rows = await queryMany<{ id: string; name: string; health: number; mana: number }>(
-    pool,
-    "SELECT id, name, health, mana FROM characters ORDER BY created_at DESC"
-  );
+  const rows = await CharactersRepo.listForGM(pool);
   return rows;
 });
 
@@ -140,27 +132,12 @@ app.get("/api/character/:id", async (req, reply) => {
   const cached = await redis.get(key);
   if (cached) return JSON.parse(cached);
 
-  const character = await queryOne<any>(
-    pool,
-    `SELECT c.*, cl.name as class_name, cl.description as class_description
-     FROM characters c
-     JOIN classes cl ON cl.id = c.class_id
-     WHERE c.id=$1`,
-    [id]
-  );
+  const character = await CharactersRepo.getDetailsWithClass(pool, id);
   if (!character) return reply.code(404).send({ error: "NOT_FOUND" });
 
   if (!isOwnerOrGM(user, character.created_by)) return reply.code(403).send({ error: "FORBIDDEN" });
 
-  const items = await queryMany<any>(
-    pool,
-    `SELECT ci.id as instance_id, i.*
-     FROM character_items ci
-     JOIN items i ON i.id = ci.item_id
-     WHERE ci.character_id=$1
-     ORDER BY ci.acquired_at ASC`,
-    [id]
-  );
+  const items = await CharacterItemsRepo.listInstancesWithItems(pool, id);
 
   const base = {
     strength: character.base_strength,
@@ -217,17 +194,21 @@ app.post("/api/character", async (req, reply) => {
   const body = CreateCharacterSchema.parse(req.body);
 
   // validate class exists
-  const cls = await queryOne<{ id: string }>(pool, "SELECT id FROM classes WHERE id=$1", [body.classId]);
-  if (!cls) return reply.code(400).send({ error: "INVALID_CLASS" });
+  const ok = await ClassesRepo.existsById(pool, body.classId);
+  if (!ok) return reply.code(400).send({ error: "INVALID_CLASS" });
 
   try {
-    const row = await queryOne<{ id: string }>(
-      pool,
-      `INSERT INTO characters(name, health, mana, base_strength, base_agility, base_intelligence, base_faith, class_id, created_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       RETURNING id`,
-      [body.name, body.health, body.mana, body.baseStrength, body.baseAgility, body.baseIntelligence, body.baseFaith, body.classId, user.sub]
-    );
+    const row = await CharactersRepo.insert(pool, {
+      name: body.name,
+      health: body.health,
+      mana: body.mana,
+      baseStrength: body.baseStrength,
+      baseAgility: body.baseAgility,
+      baseIntelligence: body.baseIntelligence,
+      baseFaith: body.baseFaith,
+      classId: body.classId,
+      createdBy: user.sub,
+    });
     return reply.code(201).send({ id: row!.id });
   } catch (e: any) {
     if (String(e?.message ?? "").includes("duplicate")) {
@@ -244,7 +225,7 @@ app.get("/api/items", async (req, reply) => {
   if (!user) return;
   if (!requireRole(user, "GameMaster", reply)) return;
 
-  const items = await queryMany<any>(pool, "SELECT * FROM items ORDER BY base_name ASC");
+  const items = await ItemsRepo.listAll(pool);
   return items.map((it: any) => ({
     id: it.id,
     baseName: it.base_name,
@@ -270,13 +251,14 @@ app.post("/api/items", async (req, reply) => {
 
   const body = CreateItemSchema.parse(req.body);
 
-  const row = await queryOne<{ id: string }>(
-    pool,
-    `INSERT INTO items(base_name, description, bonus_strength, bonus_agility, bonus_intelligence, bonus_faith)
-     VALUES($1,$2,$3,$4,$5,$6)
-     RETURNING id`,
-    [body.baseName, body.description, body.bonusStrength, body.bonusAgility, body.bonusIntelligence, body.bonusFaith]
-  );
+  const row = await ItemsRepo.insert(pool, {
+    baseName: body.baseName,
+    description: body.description,
+    bonusStrength: body.bonusStrength,
+    bonusAgility: body.bonusAgility,
+    bonusIntelligence: body.bonusIntelligence,
+    bonusFaith: body.bonusFaith,
+  });
 
   return reply.code(201).send({ id: row!.id });
 });
@@ -287,7 +269,7 @@ app.get("/api/items/:id", async (req, reply) => {
   if (!user) return;
 
   const id = (req.params as any).id as string;
-  const it = await queryOne<any>(pool, "SELECT * FROM items WHERE id=$1", [id]);
+  const it = await ItemsRepo.getById(pool, id);
   if (!it) return reply.code(404).send({ error: "NOT_FOUND" });
 
   const displayName = computeItemDisplayName(it.base_name, {
@@ -317,19 +299,15 @@ app.post("/api/items/grant", async (req, reply) => {
 
   const body = GrantItemSchema.parse(req.body);
 
-  const ch = await queryOne<any>(pool, "SELECT id FROM characters WHERE id=$1", [body.characterId]);
-  if (!ch) return reply.code(404).send({ error: "CHARACTER_NOT_FOUND" });
+  const chOk = await CharactersRepo.existsById(pool, body.characterId);
+  if (!chOk) return reply.code(404).send({ error: "CHARACTER_NOT_FOUND" });
 
-  const it = await queryOne<any>(pool, "SELECT id FROM items WHERE id=$1", [body.itemId]);
-  if (!it) return reply.code(404).send({ error: "ITEM_NOT_FOUND" });
+  const itOk = await ItemsRepo.existsById(pool, body.itemId);
+  if (!itOk) return reply.code(404).send({ error: "ITEM_NOT_FOUND" });
 
-  const row = await queryOne<{ id: string }>(
-    pool,
-    "INSERT INTO character_items(character_id, item_id) VALUES($1,$2) RETURNING id",
-    [body.characterId, body.itemId]
-  );
-
+  const row = await CharacterItemsRepo.insertInstance(pool, body.characterId, body.itemId);
   await invalidateCharacterCache(body.characterId);
+
   return reply.code(201).send({ itemInstanceId: row!.id });
 });
 
@@ -340,26 +318,23 @@ app.post("/api/items/gift", async (req, reply) => {
 
   const body = GiftItemSchema.parse(req.body);
 
-  const from = await queryOne<any>(pool, "SELECT id, created_by FROM characters WHERE id=$1", [body.fromCharacterId]);
+  const from = await CharactersRepo.getOwner(pool, body.fromCharacterId);
   if (!from) return reply.code(404).send({ error: "FROM_CHARACTER_NOT_FOUND" });
 
-  const to = await queryOne<any>(pool, "SELECT id FROM characters WHERE id=$1", [body.toCharacterId]);
-  if (!to) return reply.code(404).send({ error: "TO_CHARACTER_NOT_FOUND" });
+  const toExists = await CharactersRepo.existsById(pool, body.toCharacterId);
+  if (!toExists) return reply.code(404).send({ error: "TO_CHARACTER_NOT_FOUND" });
 
   // owner can gift, or GM
   if (!(user.role === "GameMaster" || user.sub === from.created_by)) {
     return reply.code(403).send({ error: "FORBIDDEN" });
   }
 
-  const inst = await queryOne<any>(
-    pool,
-    "SELECT id, character_id FROM character_items WHERE id=$1",
-    [body.itemInstanceId]
-  );
+  const inst = await CharacterItemsRepo.getInstance(pool, body.itemInstanceId);
+
   if (!inst) return reply.code(404).send({ error: "ITEM_INSTANCE_NOT_FOUND" });
   if (inst.character_id !== body.fromCharacterId) return reply.code(400).send({ error: "ITEM_NOT_OWNED_BY_FROM_CHARACTER" });
 
-  await pool.query("UPDATE character_items SET character_id=$1 WHERE id=$2", [body.toCharacterId, body.itemInstanceId]);
+  await CharacterItemsRepo.transferInstance(pool, body.itemInstanceId, body.toCharacterId);
 
   await invalidateCharacterCache(body.fromCharacterId);
   await invalidateCharacterCache(body.toCharacterId);
@@ -383,24 +358,10 @@ app.get("/internal/characters/:id/snapshot", async (req, reply) => {
   if (!requireInternal(req, reply)) return;
   const id = (req.params as any).id as string;
 
-  const character = await queryOne<any>(
-    pool,
-    `SELECT c.*, cl.name as class_name
-     FROM characters c
-     JOIN classes cl ON cl.id = c.class_id
-     WHERE c.id=$1`,
-    [id]
-  );
+  const character = await CharactersRepo.getInternalWithClassName(pool, id);
   if (!character) return reply.code(404).send({ error: "NOT_FOUND" });
 
-  const items = await queryMany<any>(
-    pool,
-    `SELECT ci.id as instance_id, i.*
-     FROM character_items ci
-     JOIN items i ON i.id = ci.item_id
-     WHERE ci.character_id=$1`,
-    [id]
-  );
+  const items = await CharacterItemsRepo.listInstancesWithItemsInternal(pool, id);
 
   const base = {
     strength: character.base_strength,
@@ -439,11 +400,7 @@ app.post("/internal/duels/resolve", async (req, reply) => {
     loserCharacterId: z.string().uuid(),
   }).parse(req.body);
 
-  const loserItems = await queryMany<any>(
-    pool,
-    "SELECT id, item_id FROM character_items WHERE character_id=$1",
-    [Body.loserCharacterId]
-  );
+  const loserItems = await CharacterItemsRepo.listInstancesForCharacter(pool, Body.loserCharacterId);
 
   if (loserItems.length === 0) {
     // nothing to transfer
@@ -453,7 +410,7 @@ app.post("/internal/duels/resolve", async (req, reply) => {
   }
 
   const pick = loserItems[Math.floor(Math.random() * loserItems.length)];
-  await pool.query("UPDATE character_items SET character_id=$1 WHERE id=$2", [Body.winnerCharacterId, pick.id]);
+  await CharacterItemsRepo.transferInstance(pool, pick.id, Body.winnerCharacterId);
 
   await invalidateCharacterCache(Body.winnerCharacterId);
   await invalidateCharacterCache(Body.loserCharacterId);
