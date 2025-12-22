@@ -1,63 +1,171 @@
-# Zentrix Lab – RPG Backend (3 Services, TypeScript/Node, Postgres, Redis, Docker Compose)
+# Zentrix RPG – Backend Microservices Demo
 
-This repo contains **three independently runnable services** (separate processes, DBs, migrations) organized in a single folder for easy review.
+This repository contains a small RPG backend system implemented as three independent services:
 
-- **account-service**: registration + login, issues JWT (`role`: `User` or `GameMaster`)
-- **character-service**: characters, classes, items, inventory, Redis caching for `GET /api/character/:id`
-- **combat-service**: duels + turn actions, pulls character snapshots from Character Service and notifies Character Service to resolve loot
+- **Account Service** – authentication and JWT issuing
+- **Character Service** – characters, classes, items, inventory, caching
+- **Combat Service** – duels, actions, cooldowns, timeout, loot resolution
 
-## Quick start (Docker)
+The project is intentionally **backend-only**.
+All functionality is verified via a Postman collection.
+
+---
+
+## Tech Stack
+
+- **Node.js + TypeScript** (Fastify)
+- **PostgreSQL** (separate database per service)
+- **Redis** (caching)
+- **Docker Compose** (local setup)
+
+---
+
+## Architecture Overview
+
+- Each service owns its **own database schema**
+- Services communicate exclusively via **HTTP APIs**
+- JWT is used for authentication and role-based authorization
+- Combat service works on **snapshots** of character stats to avoid tight coupling
+- Redis is used to cache character details and is invalidated on mutations
+
+This structure mirrors real-world microservice boundaries while remaining simple enough for an MVP.
+
+---
+
+## Running the System Locally
+
+From the repository root:
 
 ```bash
 docker compose up --build
 ```
 
-Services:
-- Account:   http://localhost:3001
-- Character: http://localhost:3002
-- Combat:    http://localhost:3003
+This will start:
+- Account Service (`:3001`)
+- Character Service (`:3002`)
+- Combat Service (`:3003`)
+- PostgreSQL databases
+- Redis
 
-Databases:
-- Postgres (account):   localhost:5433
-- Postgres (character): localhost:5434
-- Postgres (combat):    localhost:5435
-- Redis:                localhost:6379
+Health checks:
+- `GET http://localhost:3001/health`
+- `GET http://localhost:3002/health`
+- `GET http://localhost:3003/health`
 
-## Auth / Roles
+To reset everything (fresh databases):
 
-1) Register a user (default role: `User`) on Account Service  
-2) Login to get a JWT  
-3) Use as `Authorization: Bearer <token>` for Character/Combat calls
-
-A **GameMaster** user can be created by setting `role=GameMaster` at registration (see Postman collection).
-
-## Postman collection
-
-Import: `./postman/Zentrix-RPG.postman_collection.json`
-
-The collection includes a happy path:
-- register/login (User + GM)
-- create class/items (GM)
-- create characters (User)
-- grant/gift items (GM / owner)
-- challenge duel + actions
-
-## Notes / Design decisions (task-friendly)
-
-- **No cross-DB joins**. Services communicate via HTTP APIs.
-- Each service runs **SQL migrations on startup** (tracked in `schema_migrations` table).
-- Character `GET /api/character/:id` uses **Redis read-through cache** and is invalidated on inventory changes.
-- Combat uses **snapshot-on-challenge**: it stores per-duel stats + current health in its own DB and applies cooldown rules.
-- Combat calls Character Service internal endpoints secured with `X-Internal-Token`.
-
-## Local dev (without Docker)
-
-Each service can be run individually:
 ```bash
-cd services/account-service && npm i && npm run dev
-cd services/character-service && npm i && npm run dev
-cd services/combat-service && npm i && npm run dev
+docker compose down -v
 ```
 
-Make sure Postgres/Redis env vars are set (see each service `.env.example`).
+---
 
+## Configuration Notes
+
+Configuration is provided via `docker-compose.yml`.
+
+Important variables:
+- `JWT_SECRET` – used across services for JWT verification
+- `INTERNAL_TOKEN` – simple service-to-service authentication
+- `CHARACTER_SERVICE_URL` – Combat → Character communication
+- `REDIS_URL` – Character cache
+
+### Duel Timeout
+- Default duel timeout is **5 minutes** (as required by the task)
+- For demo/testing purposes this can be overridden:
+  - `DUEL_TIMEOUT_MS` (e.g. `30000` for 30 seconds)
+
+Timeouts are enforced server-side.
+
+---
+
+## Database Migrations & Seeding
+
+- Each service runs its own migrations on startup
+- Character Service seeds initial reference data (e.g. character classes)
+
+No manual database setup is required.
+
+---
+
+## Verifying the System (Postman)
+
+The entire system is verified via a **Postman collection**.
+
+### Importing the Collection
+
+1. Open **Postman**
+2. Click **Import**
+3. Select:
+   `postman/Zentrix-RPG.postman_collection.json`
+4. Import
+
+No Postman environment is required.
+
+---
+
+## Important: Execution Order
+
+⚠️ **The execution order of requests matters.**
+
+The Postman collection uses **pre-request and post-response scripts** to automatically manage variables required by subsequent requests.
+
+These scripts:
+- store JWT tokens after login
+- store created character IDs
+- store duel IDs after challenge creation
+
+Because of this, requests must be executed **in the intended order**.
+
+### Typical Flow
+
+1. **Account**
+   - Register User
+   - Register GameMaster
+   - Login User → sets `userToken`
+   - Login GameMaster → sets `gmToken`
+
+2. **Character**
+   - Create first character (Hero A) → sets `charA`
+   - Create second character (Hero B) → sets `charB`
+   - (Optional) Create and grant items
+
+3. **Combat**
+   - Challenge duel → sets `duelId`
+   - Perform actions (attack / cast / heal)
+
+All required IDs and tokens are propagated automatically between requests.
+No manual copy/paste is needed.
+
+---
+
+## Combat Behavior Notes
+
+- Actions are restricted to duel participants
+- Cooldowns are enforced server-side:
+  - Attack: 1 second
+  - Cast / Heal: 2 seconds
+- If a duel exceeds the configured timeout, it is resolved as a **Draw**
+- On draw, no loot is transferred
+- On victory, a random item is transferred from the defeated character
+
+Timeout handling is demonstrated via the Postman collection by waiting beyond the timeout window and then attempting an action.
+
+---
+
+## Design Intent
+
+This project focuses on:
+- clear service boundaries
+- ownership of data per service
+- realistic backend workflows
+- testability without a UI
+- avoiding unnecessary overengineering
+
+The goal is to demonstrate **system design and backend reasoning**, not to build a full game.
+
+---
+
+## License
+
+Internal demo / take-home assignment project.
