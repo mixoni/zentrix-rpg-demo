@@ -217,9 +217,9 @@ async function applyAction(duelId: string, action: "attack"|"cast"|"heal", actor
 
   await DuelsRepo.applyActionTx(pool, {
     duelId,
-    hpFieldSql: hpField,
-    enemyHpFieldSql: enemyHpField,
-    cooldownFieldSql: cooldownField,
+    hpFieldSql: hpField as DuelsRepo.HpFieldSql,
+    enemyHpFieldSql: enemyHpField as DuelsRepo.HpFieldSql,
+    cooldownFieldSql: cooldownField as DuelsRepo.CooldownFieldSql,
     newSelfHp,
     newEnemyHp,
     actorId,

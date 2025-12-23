@@ -3,6 +3,28 @@ import { queryOne } from "../db";
 
 export type DuelStatus = "Active" | "Finished" | "Draw";
 
+
+export type HpFieldSql = "challenger_hp" | "opponent_hp";
+export type CooldownFieldSql =
+  | "challenger_last_attack"
+  | "challenger_last_cast"
+  | "challenger_last_heal"
+  | "opponent_last_attack"
+  | "opponent_last_cast"
+  | "opponent_last_heal";
+
+
+const VALID_HP_FIELDS: ReadonlySet<HpFieldSql> = new Set(["challenger_hp", "opponent_hp"]);
+const VALID_COOLDOWN_FIELDS: ReadonlySet<CooldownFieldSql> = new Set([
+  "challenger_last_attack",
+  "challenger_last_cast",
+  "challenger_last_heal",
+  "opponent_last_attack",
+  "opponent_last_cast",
+  "opponent_last_heal",
+]);
+
+
 export async function getById(pool: Pool, duelId: string) {
   return queryOne<any>(pool, "SELECT * FROM duels WHERE id=$1", [duelId]);
 }
@@ -50,30 +72,48 @@ export async function finish(pool: Pool, duelId: string, winnerCharacterId: stri
   );
 }
 
-export async function applyActionTx(pool: Pool, args: {
-  duelId: string;
-  hpFieldSql: string;       
-  enemyHpFieldSql: string;  
-  cooldownFieldSql: string;  
-  newSelfHp: number;
-  newEnemyHp: number;
-  actorId: string;
-  action: "attack" | "cast" | "heal";
-  amount: number;
-}) {
+
+
+export async function applyActionTx(
+  pool: Pool,
+  args: {
+    duelId: string;
+    hpFieldSql: HpFieldSql;
+    enemyHpFieldSql: HpFieldSql;
+    cooldownFieldSql: CooldownFieldSql;
+    newSelfHp: number;
+    newEnemyHp: number;
+    actorId: string;
+    action: "attack" | "cast" | "heal";
+    amount: number;
+  }
+) {
+  if (!VALID_HP_FIELDS.has(args.hpFieldSql)) throw new Error("Invalid HP field");
+  if (!VALID_HP_FIELDS.has(args.enemyHpFieldSql)) throw new Error("Invalid enemy HP field");
+  if (!VALID_COOLDOWN_FIELDS.has(args.cooldownFieldSql)) throw new Error("Invalid cooldown field");
+
+  if (args.hpFieldSql === args.enemyHpFieldSql) {
+    throw new Error("HP fields cannot be the same");
+  }
+
   await pool.query("BEGIN");
   try {
     await pool.query(
-      `UPDATE duels SET ${args.hpFieldSql}=$1, ${args.enemyHpFieldSql}=$2, ${args.cooldownFieldSql}=NOW() WHERE id=$3`,
+      `UPDATE duels
+       SET ${args.hpFieldSql}=$1, ${args.enemyHpFieldSql}=$2, ${args.cooldownFieldSql}=NOW()
+       WHERE id=$3`,
       [args.newSelfHp, args.newEnemyHp, args.duelId]
     );
+
     await pool.query(
       "INSERT INTO duel_actions(duel_id, actor_character_id, action_type, amount) VALUES($1,$2,$3,$4)",
       [args.duelId, args.actorId, args.action, args.amount]
     );
+
     await pool.query("COMMIT");
   } catch (e) {
     await pool.query("ROLLBACK");
     throw e;
   }
 }
+
