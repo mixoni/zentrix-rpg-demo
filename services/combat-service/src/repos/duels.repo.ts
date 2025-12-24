@@ -3,9 +3,35 @@ import { queryOne } from "../db";
 
 export type DuelStatus = "Active" | "Finished" | "Draw";
 
+export type DuelRow = {
+  id: string;
+  challenger_character_id: string;
+  opponent_character_id: string;
+  challenger_user_id: string;
+  status: DuelStatus;
+  started_at: string;
+  ended_at: string | null;
+  challenger_strength: number;
+  challenger_agility: number;
+  challenger_intelligence: number;
+  challenger_faith: number;
+  opponent_strength: number;
+  opponent_agility: number;
+  opponent_intelligence: number;
+  opponent_faith: number;
+  challenger_hp: number;
+  opponent_hp: number;
+  challenger_last_attack: string | null;
+  challenger_last_cast: string | null;
+  challenger_last_heal: string | null;
+  opponent_last_attack: string | null;
+  opponent_last_cast: string | null;
+  opponent_last_heal: string | null;
+  winner_character_id: string | null;
+};
 
-export type HpFieldSql = "challenger_hp" | "opponent_hp";
-export type CooldownFieldSql =
+export type VALID_HP_FIELDS = "challenger_hp" | "opponent_hp";
+export type VALID_COOLDOWN_FIELDS =
   | "challenger_last_attack"
   | "challenger_last_cast"
   | "challenger_last_heal"
@@ -14,8 +40,8 @@ export type CooldownFieldSql =
   | "opponent_last_heal";
 
 
-const VALID_HP_FIELDS: ReadonlySet<HpFieldSql> = new Set(["challenger_hp", "opponent_hp"]);
-const VALID_COOLDOWN_FIELDS: ReadonlySet<CooldownFieldSql> = new Set([
+const VALID_HP_FIELDS: ReadonlySet<VALID_HP_FIELDS> = new Set(["challenger_hp", "opponent_hp"]);
+const VALID_COOLDOWN_FIELDS: ReadonlySet<VALID_COOLDOWN_FIELDS> = new Set([
   "challenger_last_attack",
   "challenger_last_cast",
   "challenger_last_heal",
@@ -26,7 +52,7 @@ const VALID_COOLDOWN_FIELDS: ReadonlySet<CooldownFieldSql> = new Set([
 
 
 export async function getById(pool: Pool, duelId: string) {
-  return queryOne<any>(pool, "SELECT * FROM duels WHERE id=$1", [duelId]);
+  return queryOne<DuelRow>(pool, "SELECT * FROM duels WHERE id=$1", [duelId]);
 }
 
 export async function create(pool: Pool, args: {
@@ -76,9 +102,9 @@ export async function applyActionTx(
   pool: Pool,
   args: {
     duelId: string;
-    hpFieldSql: HpFieldSql;
-    enemyHpFieldSql: HpFieldSql;
-    cooldownFieldSql: CooldownFieldSql;
+    hpFieldSql: VALID_HP_FIELDS;
+    enemyHpFieldSql: VALID_HP_FIELDS;
+    cooldownFieldSql: VALID_COOLDOWN_FIELDS;
     cooldownSeconds: number;      
     newSelfHp: number;
     newEnemyHp: number;

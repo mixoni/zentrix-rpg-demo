@@ -5,7 +5,36 @@ export type CharacterListRow = { id: string; name: string; health: number; mana:
 
 export type CharacterOwnerRow = { id: string; created_by: string };
 
-export type CharacterWithClassRow = any;
+export type CharacterWithClassRow = {
+  id: string;
+  name: string;
+  health: number;
+  mana: number;
+  base_strength: number;
+  base_agility: number;
+  base_intelligence: number;
+  base_faith: number;
+  class_id: string;
+  created_by: string;
+  created_at: string;
+  class_name: string;
+  class_description: string;
+};
+
+export type CharacterInternalRow = {
+  id: string;
+  name: string;
+  health: number;
+  mana: number;
+  base_strength: number;
+  base_agility: number;
+  base_intelligence: number;
+  base_faith: number;
+  class_id: string;
+  created_by: string;
+  created_at: string;
+  class_name: string;
+};
 
 export async function listForGM(pool: Pool): Promise<CharacterListRow[]> {
   return queryMany<CharacterListRow>(
@@ -28,7 +57,7 @@ export async function existsById(pool: Pool, id: string): Promise<boolean> {
 }
 
 export async function getDetailsWithClass(pool: Pool, id: string): Promise<CharacterWithClassRow | null> {
-  return queryOne<any>(
+  return queryOne<CharacterWithClassRow>(
     pool,
     `SELECT c.*, cl.name as class_name, cl.description as class_description
      FROM characters c
@@ -39,7 +68,7 @@ export async function getDetailsWithClass(pool: Pool, id: string): Promise<Chara
 }
 
 export async function getInternalWithClassName(pool: Pool, id: string): Promise<any | null> {
-  return queryOne<any>(
+  return queryOne<CharacterWithClassRow>(
     pool,
     `SELECT c.*, cl.name as class_name
      FROM characters c

@@ -14,15 +14,15 @@ function actorIsChallenger(duel: any, actorId: string) {
     return duel.challenger_character_id === actorId;
 }
 
-function hpField(isChallenger: boolean): DuelsRepo.HpFieldSql {
+function hpField(isChallenger: boolean): DuelsRepo.VALID_HP_FIELDS {
     return isChallenger ? "challenger_hp" : "opponent_hp";
 }
-function enemyHpField(isChallenger: boolean): DuelsRepo.HpFieldSql {
+function enemyHpField(isChallenger: boolean): DuelsRepo.VALID_HP_FIELDS {
     return isChallenger ? "opponent_hp" : "challenger_hp";
 }
-function cooldownField(isChallenger: boolean, action: DuelAction): DuelsRepo.CooldownFieldSql {
+function cooldownField(isChallenger: boolean, action: DuelAction): DuelsRepo.VALID_COOLDOWN_FIELDS {
     const prefix = isChallenger ? "challenger" : "opponent";
-    return `${prefix}_last_${action}` as DuelsRepo.CooldownFieldSql;
+    return `${prefix}_last_${action}` as DuelsRepo.VALID_COOLDOWN_FIELDS;
 }
 function getStats(isChallenger: boolean, duel: any) {
     const prefix = isChallenger ? "challenger" : "opponent";

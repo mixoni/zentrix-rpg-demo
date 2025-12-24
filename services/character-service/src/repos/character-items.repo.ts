@@ -3,8 +3,19 @@ import { queryMany, queryOne } from "../db";
 
 export type CharacterItemInstanceRow = { id: string; character_id: string; item_id: string };
 
+export type CharacterItemWithDetails = {
+  instance_id: string;
+  id: string;
+  base_name: string;
+  description: string;
+  bonus_strength: number;
+  bonus_agility: number;
+  bonus_intelligence: number;
+  bonus_faith: number;
+};
+
 export async function listInstancesWithItems(pool: Pool, characterId: string) {
-  return queryMany<any>(
+  return queryMany<CharacterItemWithDetails>(
     pool,
     `SELECT ci.id as instance_id, i.*
      FROM character_items ci
@@ -16,7 +27,7 @@ export async function listInstancesWithItems(pool: Pool, characterId: string) {
 }
 
 export async function listInstancesWithItemsInternal(pool: Pool, characterId: string) {
-  return queryMany<any>(
+  return queryMany<CharacterItemWithDetails>(
     pool,
     `SELECT ci.id as instance_id, i.*
      FROM character_items ci
