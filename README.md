@@ -133,6 +133,9 @@ Because of this, requests must be executed **in the intended order**.
 3. **Combat**
    - Challenge duel → sets `duelId`
    - Perform actions (attack / cast / heal)
+4. **Character status checks**
+   - Check character state (Hero A) → if Hero A winner, then win the item also
+   - Check character state (Hero B) → if Hero B loser, then loose the item also
 
 All required IDs and tokens are propagated automatically between requests.
 No manual copy/paste is needed.
