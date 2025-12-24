@@ -61,7 +61,7 @@
 			"response": []
 		},
 		{
-			"name": "Account - Login User (set userToken manually from response)",
+			"name": "Account - Login User",
 			"event": [
 				{
 					"listen": "test",
@@ -119,7 +119,7 @@
 			"response": []
 		},
 		{
-			"name": "Account - Login GM (set gmToken manually from response)",
+			"name": "Account - Login GM",
 			"event": [
 				{
 					"listen": "test",
@@ -217,6 +217,64 @@
 			"response": []
 		},
 		{
+			"name": "Character - GM - Create item",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const json = pm.response.json();\r",
+							"pm.collectionVariables.set(\"itemId\", json.id);\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{gmToken}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"baseName\": \"Epic Test Sword - postman 002\",\r\n    \"description\": \"Item created via Postman - 002\",\r\n    \"bonusStrength\": 11,\r\n    \"bonusAgility\": 1,\r\n    \"bonusIntelligence\": 1,\r\n    \"bonusFaith\": 1\r\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{characterUrl}}/api/items",
+					"host": [
+						"{{characterUrl}}"
+					],
+					"path": [
+						"api",
+						"items"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST \"$CHARACTER_BASE_URL/api/items\" \\\r\n  -H \"Authorization: Bearer $TOKEN_GM\" \\\r\n  -H \"Content-Type: application/json\" \\\r\n  -d '{\r\n    \"baseName\": \"Epic Test Sword\",\r\n    \"description\": \"Item created via curl\",\r\n    \"bonusStrength\": 5,\r\n    \"bonusAgility\": 0,\r\n    \"bonusIntelligence\": 0,\r\n    \"bonusFaith\": 0\r\n  }'\r\n"
+			},
+			"response": []
+		},
+		{
 			"name": "Character - Create character heroA (User)",
 			"event": [
 				{
@@ -262,7 +320,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"name\": \"HeroA\",\n  \"classId\": \"a157ccdf-5dab-4ef9-958a-719f2b411400\",\n  \"health\": 100,\n  \"mana\": 50,\n  \"baseStrength\": 5,\n  \"baseAgility\": 5,\n  \"baseIntelligence\": 2,\n  \"baseFaith\": 1\n}"
+					"raw": "{\n  \"name\": \"HeroA002\",\n  \"classId\": \"a157ccdf-5dab-4ef9-958a-719f2b411400\",\n  \"health\": 100,\n  \"mana\": 50,\n  \"baseStrength\": 5,\n  \"baseAgility\": 5,\n  \"baseIntelligence\": 2,\n  \"baseFaith\": 1\n}"
 				},
 				"url": {
 					"raw": "{{characterUrl}}/api/character",
@@ -323,7 +381,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"name\": \"HeroB\",\n  \"classId\": \"3ecbf895-5919-40ba-b2fb-080c09ff845a\",\n  \"health\": 100,\n  \"mana\": 50,\n  \"baseStrength\": 5,\n  \"baseAgility\": 5,\n  \"baseIntelligence\": 2,\n  \"baseFaith\": 1\n}"
+					"raw": "{\n  \"name\": \"HeroB002\",\n  \"classId\": \"3ecbf895-5919-40ba-b2fb-080c09ff845a\",\n  \"health\": 100,\n  \"mana\": 50,\n  \"baseStrength\": 5,\n  \"baseAgility\": 5,\n  \"baseIntelligence\": 2,\n  \"baseFaith\": 1\n}"
 				},
 				"url": {
 					"raw": "{{characterUrl}}/api/character",
@@ -333,6 +391,64 @@
 					"path": [
 						"api",
 						"character"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Character - GM - Grant item to hero",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const json = pm.response.json();\r",
+							"pm.collectionVariables.set(\"itemInstanceId\", json.itemInstanceId);\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{gmToken}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"characterId\": \"{{charB}}\",\r\n    \"itemId\": \"{{itemId}}\"\r\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{characterUrl}}/api/items/grant",
+					"host": [
+						"{{characterUrl}}"
+					],
+					"path": [
+						"api",
+						"items",
+						"grant"
 					]
 				}
 			},
@@ -458,6 +574,40 @@
 						"api",
 						"{{duelId}}",
 						"attack"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Character - item status on hero A",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{userToken}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer $TOKEN_USER"
+					}
+				],
+				"url": {
+					"raw": "{{characterUrl}}/api/character/{{charA}}",
+					"host": [
+						"{{characterUrl}}"
+					],
+					"path": [
+						"api",
+						"character",
+						"{{charA}}"
 					]
 				}
 			},

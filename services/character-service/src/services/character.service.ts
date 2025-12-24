@@ -16,8 +16,7 @@ export async function getCharacterDetailsCached(args: {
 }) {
   const { pool, redis, characterId: id, user } = args;
 
-  const key = `character:${id}:details`;
-  const cached = await getCharacterCache(redis, key);
+  const cached = await getCharacterCache(redis, id);
   if (cached) {
     return { status: 200, body: JSON.parse(cached) };
   }
@@ -78,6 +77,6 @@ export async function getCharacterDetailsCached(args: {
     })),
   };
 
-  await setCharacterCache(redis, key, JSON.stringify(result));
+  await setCharacterCache(redis, id, JSON.stringify(result));
   return { status: 200, body: result };
 }

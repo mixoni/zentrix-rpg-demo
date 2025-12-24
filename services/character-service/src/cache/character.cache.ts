@@ -5,6 +5,7 @@ export function detailsKey(id: string) {
 }
 
 export async function getCharacterCache(redis: any, id: string) {
+  console.log("[cache] GET", detailsKey(id));
   const raw = await redis.get(detailsKey(id));
   return raw ? JSON.parse(raw) : null;
 }
@@ -14,6 +15,8 @@ export async function setCharacterCache(redis: any, id: string, value: any) {
 }
 
 export async function invalidateCharacterCache(redis: any, id: string) {
-  await redis.del(detailsKey(id));
+  console.log("[cache] DEL", detailsKey(id));
+  const deleted = await redis.del(detailsKey(id));
+  console.log("[cache] DEL result", deleted);
 }
 
