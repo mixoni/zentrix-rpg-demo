@@ -9,6 +9,7 @@ import * as ItemsRepo from "./repos/items.repo";
 import { registerCharacterRoutes } from "./routes/character.routes";
 import { registerItemsRoutes } from "./routes/items.routes";
 import { registerInternalRoutes } from "./routes/internal.routes";
+import { globalErrorHandler } from "./errors/error-handler";
 
 
 const env = {
@@ -36,7 +37,14 @@ const deps = {
 
 const app = Fastify({ logger: true });
 
+app.setErrorHandler(globalErrorHandler);
+
+
 app.get("/health", async () => ({ ok: true }));
+
+registerCharacterRoutes(app, deps);
+registerItemsRoutes(app, deps);
+registerInternalRoutes(app, deps);
 
 async function seedIfNeeded() {
   const cnt = await ClassesRepo.count(pool);
@@ -52,15 +60,12 @@ async function main() {
   await runMigrations(pool, path.join(__dirname, "..", "migrations"));
   await seedIfNeeded();
 
-  await registerCharacterRoutes(app, deps);
-  await registerItemsRoutes(app, deps);
-  await registerInternalRoutes(app, deps);
+
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
 }
 
 main().catch((e) => {
-  // eslint-disable-next-line no-console
   console.error(e);
   process.exit(1);
 });

@@ -6,12 +6,12 @@ import { runMigrations } from "./migrations";
 import { registerHealthRoutes } from "./routes/health.routes";
 import { registerAuthRoutes } from "./routes/auth.routes";
 import { registerInternalRoutes } from "./routes/internal.routes";
+import { globalErrorHandler } from "./errors/error-handler";
 
 const env = {
   PORT: Number(process.env.PORT ?? 3001),
   DATABASE_URL: process.env.DATABASE_URL ?? "",
   JWT_SECRET: process.env.JWT_SECRET ?? "",
-  // optional:
   INTERNAL_TOKEN: process.env.INTERNAL_TOKEN ?? "",
 };
 
@@ -20,6 +20,8 @@ if (!env.JWT_SECRET) throw new Error("JWT_SECRET is required");
 
 const pool = createPool(env.DATABASE_URL);
 const app = Fastify({ logger: true });
+
+app.setErrorHandler(globalErrorHandler);
 
 registerHealthRoutes(app);
 registerAuthRoutes(app, { pool, jwtSecret: env.JWT_SECRET });
