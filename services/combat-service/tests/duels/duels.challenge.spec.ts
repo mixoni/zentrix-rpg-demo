@@ -19,7 +19,9 @@ function authHeader(sub = "user-1") {
 }
 
 describe("POST /api/challenge", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
 
   it("201 creates duel and returns duelId", async () => {
     (DuelsRepo.create as any).mockResolvedValue({ id: "duel-xyz" });

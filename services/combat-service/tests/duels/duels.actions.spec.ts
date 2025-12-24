@@ -56,7 +56,10 @@ function activeDuel(overrides: any = {}) {
 }
 
 describe("Duels actions", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    (DuelsRepo.applyActionTx as any).mockResolvedValue({ ok: true });
+  });
 
   it("FORBIDDEN: opponent (not owner, not GM) tries to attack", async () => {
     (DuelsRepo.getById as any).mockResolvedValue(

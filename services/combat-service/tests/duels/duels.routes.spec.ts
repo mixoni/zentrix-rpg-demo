@@ -32,6 +32,7 @@ const characterClient = {
 describe("duels.routes (integration via inject)", () => {
     beforeEach(() => {
         vi.resetAllMocks();
+        (DuelsRepo.applyActionTx as any).mockResolvedValue({ ok: true });
     });
 
     it("POST /api/:duelId/attack => 429 COOLDOWN when called too fast", async () => {
@@ -107,6 +108,7 @@ describe("duels.routes (integration via inject)", () => {
             opponent_intelligence: 1,
             opponent_faith: 1,
         });
+        (DuelsRepo.applyActionTx as any).mockResolvedValue({ ok: false });
 
         const res = await app.inject({
             method: "POST",

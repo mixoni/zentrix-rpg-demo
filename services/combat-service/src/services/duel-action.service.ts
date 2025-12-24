@@ -115,17 +115,22 @@ export async function applyDuelAction(args: {
     if (action === "heal") newSelfHp += amount;
     else newEnemyHp = Math.max(0, newEnemyHp - amount);
 
-    await DuelsRepo.applyActionTx(pool, {
+    const tx = await DuelsRepo.applyActionTx(pool, {
         duelId,
         hpFieldSql: myHpField,
         enemyHpFieldSql: enemyField,
         cooldownFieldSql: cdField,
+        cooldownSeconds: cooldown,
         newSelfHp,
         newEnemyHp,
         actorId: actorCharacterId,
         action,
         amount,
     });
+
+    if (!tx.ok) {
+        return { status: 429, body: { error: "COOLDOWN" } };
+      }
 
     // win condition
     if (action !== "heal" && newEnemyHp === 0) {

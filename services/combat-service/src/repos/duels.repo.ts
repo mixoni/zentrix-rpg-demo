@@ -72,8 +72,6 @@ export async function finish(pool: Pool, duelId: string, winnerCharacterId: stri
   );
 }
 
-
-
 export async function applyActionTx(
   pool: Pool,
   args: {
@@ -81,6 +79,7 @@ export async function applyActionTx(
     hpFieldSql: HpFieldSql;
     enemyHpFieldSql: HpFieldSql;
     cooldownFieldSql: CooldownFieldSql;
+    cooldownSeconds: number;      
     newSelfHp: number;
     newEnemyHp: number;
     actorId: string;
@@ -91,29 +90,42 @@ export async function applyActionTx(
   if (!VALID_HP_FIELDS.has(args.hpFieldSql)) throw new Error("Invalid HP field");
   if (!VALID_HP_FIELDS.has(args.enemyHpFieldSql)) throw new Error("Invalid enemy HP field");
   if (!VALID_COOLDOWN_FIELDS.has(args.cooldownFieldSql)) throw new Error("Invalid cooldown field");
-
-  if (args.hpFieldSql === args.enemyHpFieldSql) {
-    throw new Error("HP fields cannot be the same");
-  }
+  if (args.hpFieldSql === args.enemyHpFieldSql) throw new Error("HP fields cannot be the same");
 
   await pool.query("BEGIN");
   try {
-    await pool.query(
+    const upd = await pool.query(
       `UPDATE duels
-       SET ${args.hpFieldSql}=$1, ${args.enemyHpFieldSql}=$2, ${args.cooldownFieldSql}=NOW()
-       WHERE id=$3`,
-      [args.newSelfHp, args.newEnemyHp, args.duelId]
+       SET ${args.hpFieldSql}=$1,
+           ${args.enemyHpFieldSql}=$2,
+           ${args.cooldownFieldSql}=NOW()
+       WHERE id=$3
+         AND status='Active'
+         AND (
+           ${args.cooldownFieldSql} IS NULL
+           OR ${args.cooldownFieldSql} <= NOW() - ($4::int * interval '1 second')
+         )
+       RETURNING id`,
+      [args.newSelfHp, args.newEnemyHp, args.duelId, args.cooldownSeconds]
     );
 
+    if (upd.rowCount === 0) {
+      await pool.query("ROLLBACK");
+      return { ok: false as const };
+    }
+
     await pool.query(
-      "INSERT INTO duel_actions(duel_id, actor_character_id, action_type, amount) VALUES($1,$2,$3,$4)",
+      `INSERT INTO duel_actions(duel_id, actor_character_id, action_type, amount)
+       VALUES($1,$2,$3,$4)`,
       [args.duelId, args.actorId, args.action, args.amount]
     );
 
     await pool.query("COMMIT");
+    return { ok: true as const };
   } catch (e) {
     await pool.query("ROLLBACK");
     throw e;
   }
 }
+
 
