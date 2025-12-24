@@ -164,6 +164,66 @@ This project focuses on:
 
 The goal is to demonstrate **system design and backend reasoning**, not to build a full game.
 
+## Known Limitations & Production Considerations
+
+This is an MVP implementation demonstrating microservice architecture and backend design patterns. For production deployment, the following areas would need attention:
+
+### Architecture Improvements Implemented
+
+✅ **Service Layer Pattern** – Clean separation: Routes → Services → Repositories
+✅ **Internal API Isolation** – Combat service uses dedicated internal endpoints
+✅ **Repository Pattern** – Data access logic isolated from business logic
+✅ **Input Validation** – Zod schemas validate all inputs
+✅ **Cache Invalidation** – Redis cache properly invalidated on mutations
+✅ **Type Safety** – Strong typing for database queries and service contracts
+✅ **SQL Injection Prevention** – Field name whitelisting in dynamic queries
+
+### Production Gaps
+
+**Security:**
+- **Rate Limiting**: No rate limiting implemented. Vulnerable to API abuse. Consider `@fastify/rate-limit`.
+- **Internal Token**: Simple shared secret for service-to-service auth. Production should use mTLS or service mesh.
+- **Secret Management**: Secrets in docker-compose.yml. Use vault/secrets manager in production.
+
+**Reliability:**
+- **Error Handling**: No retry logic for inter-service HTTP calls. Consider exponential backoff or circuit breaker pattern.
+- **Database Pooling**: Using defaults. Should tune connection pool size for expected load.
+- **Graceful Shutdown**: Services don't handle SIGTERM. Add graceful shutdown for zero-downtime deployments.
+
+**Observability:**
+- **Structured Logging**: Basic Fastify logger. Production needs structured logs (JSON) with correlation IDs.
+- **Metrics**: No Prometheus/metrics endpoint. Add request latency, error rates, business metrics.
+- **Distributed Tracing**: No request tracing across services. Consider OpenTelemetry.
+- **Health Checks**: Basic `/health` endpoint doesn't check dependencies (DB, Redis).
+
+**Scalability:**
+- **Horizontal Scaling**: Combat service needs distributed locks for concurrent duel actions.
+- **Redis HA**: Single Redis instance. Production needs Redis Sentinel or cluster.
+- **Database**: No read replicas. Consider for read-heavy workloads.
+
+**Testing:**
+- **Coverage**: Only 3 unit tests as examples. Production needs integration and E2E tests.
+- **Load Testing**: No performance benchmarks. Should establish SLAs.
+
+### Design Trade-offs
+
+**Snapshot-Based Combat:**
+- ✅ Decouples services (Combat doesn't query Character database)
+- ✅ Prevents mid-duel stat manipulation
+- ❌ Stats stale if character changes before duel starts
+
+**Cache-Aside Pattern:**
+- ✅ Simple to implement and reason about
+- ✅ Redis failure degrades to database queries (not catastrophic)
+- ❌ Potential cache stampede under high concurrent load
+- ❌ TTL-based expiration may serve slightly stale data
+
+**Microservice Per Domain:**
+- ✅ Independent deployment and scaling
+- ✅ Technology flexibility per service
+- ❌ Network overhead for inter-service calls
+- ❌ Eventual consistency challenges
+
 ---
 
 ## License
