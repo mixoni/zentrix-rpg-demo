@@ -3,6 +3,7 @@ import { challengeDuel } from "../services/duel-challenge.service";
 import { applyDuelAction } from "../services/duel-action.service";
 import { requireAuth } from "../auth/auth";
 import type { FastifyInstance } from "fastify"
+import { ZodError } from "zod";
 
 const ChallengeSchema = z.object({
   challengerCharacterId: z.string().uuid(),
@@ -26,6 +27,16 @@ type Deps = {
     }) => Promise<any>;
   };
 };
+
+export function registerErrorHandling(app: any) {
+  app.setErrorHandler((err: any, _req: any, reply: any) => {
+    if (err instanceof ZodError) {
+      return reply.code(400).send({ error: "VALIDATION_ERROR", details: err.errors });
+    }
+    app.log.error(err);
+    return reply.code(500).send({ error: "INTERNAL_ERROR" });
+  });
+}
 
 export async function registerDuelsRoutes(app: FastifyInstance, deps: Deps) {
   app.post("/api/challenge", async (req: any, reply: any) => {

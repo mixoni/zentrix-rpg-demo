@@ -1,38 +1,33 @@
+/**
+ * Integration-style tests for duels HTTP routes.
+ * Fastify app is bootstrapped with mocked dependencies.
+ */
+
+
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import Fastify from "fastify";
-import { registerDuelsRoutes } from "../routes/duels.routes";
+import { buildTestApp } from "../helpers/testApp";
 
 // mock repo modul koji duels routes/service koristi
-vi.mock("../repos/duels.repo", () => {
+vi.mock("../../src/repos/duels.repo", async () => {
+    const actual = await vi.importActual<any>("../../src/repos/duels.repo");
     return {
-        getById: vi.fn(),
-        create: vi.fn(),
-        applyActionTx: vi.fn(),
-        finish: vi.fn(),
+      ...actual,
+      getById: vi.fn(),
+      create: vi.fn(),
+      finish: vi.fn(),
+      applyActionTx: vi.fn(),
     };
-});
+  });
 
-import * as DuelsRepo from "../repos/duels.repo";
+import * as DuelsRepo from "../../src/repos/duels.repo";
+import { CHAR_A, CHAR_B, DUEL_ID, JWT_SECRET, USER_1 } from "../helpers/fixtures";
 
-function appInstanceMock() {
-    const app = Fastify({ logger: false });
 
-    const pool = {} as any;
+const characterClient = {
+    snapshot: vi.fn(async (id: string) => ({ id, createdBy: USER_1 })),
+    resolveDuel: vi.fn(async () => ({})),
+  };
 
-    const characterClient = {
-        snapshot: vi.fn(),
-        resolveDuel: vi.fn(),
-    };
-
-    registerDuelsRoutes(app, {
-        pool,
-        jwtSecret: "test-secret",
-        duelTimeoutMs: 5 * 60 * 1000,
-        characterClient,
-    });
-
-    return { app, pool, characterClient };
-}
 
 describe("duels.routes (integration via inject)", () => {
     beforeEach(() => {
@@ -40,15 +35,22 @@ describe("duels.routes (integration via inject)", () => {
     });
 
     it("POST /api/:duelId/attack => 429 COOLDOWN when called too fast", async () => {
-        const { app } = appInstanceMock();
+        
+
+        const app = buildTestApp({
+            pool: {},
+            jwtSecret: JWT_SECRET,
+            duelTimeoutMs: 5 * 60_000,
+            characterClient,
+          });
 
         (DuelsRepo.getById as any).mockResolvedValue({
-            id: "duel-1",
+            id: DUEL_ID,
             status: "Active",
             started_at: new Date().toISOString(),
-            challenger_character_id: "char-A",
-            opponent_character_id: "char-B",
-            challenger_user_id: "user-1",
+            challenger_character_id: CHAR_A,
+            opponent_character_id: CHAR_B,
+            challenger_user_id: USER_1,
 
             challenger_strength: 1,
             challenger_agility: 1,
@@ -69,26 +71,31 @@ describe("duels.routes (integration via inject)", () => {
 
         const res = await app.inject({
             method: "POST",
-            url: "/api/duel-1/attack",
+            url: `/api/${DUEL_ID}/attack`,
             headers: {
                 authorization: "Bearer FAKE_TOKEN",
             },
-            payload: { actorCharacterId: "char-A" },
+            payload: { actorCharacterId: CHAR_A },
         });
 
         expect([429, 401]).toContain(res.statusCode);
     });
 
     it("POST /api/:duelId/attack => 409 TIMEOUT when duel expired", async () => {
-        const { app } = appInstanceMock();
+        const app = buildTestApp({
+            pool: {},
+            jwtSecret: JWT_SECRET,
+            duelTimeoutMs: 5 * 60_000,
+            characterClient,
+          });
 
         (DuelsRepo.getById as any).mockResolvedValue({
-            id: "duel-1",
+            id: DUEL_ID,
             status: "Active",
             started_at: new Date(Date.now() - 10_000).toISOString(), // 10s ago
-            challenger_character_id: "char-A",
-            opponent_character_id: "char-B",
-            challenger_user_id: "user-1",
+            challenger_character_id: CHAR_A,
+            opponent_character_id: CHAR_B,
+            challenger_user_id: USER_1,
             challenger_hp: 10,
             opponent_hp: 10,
             challenger_strength: 1,
@@ -103,9 +110,9 @@ describe("duels.routes (integration via inject)", () => {
 
         const res = await app.inject({
             method: "POST",
-            url: "/api/duel-1/attack",
+            url: `/api/${DUEL_ID}/attack`,
             headers: { authorization: "Bearer FAKE_TOKEN" },
-            payload: { actorCharacterId: "char-A" },
+            payload: { actorCharacterId: CHAR_A },
         });
 
         expect([409, 401]).toContain(res.statusCode);
