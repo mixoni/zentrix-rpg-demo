@@ -5,10 +5,7 @@ type Deps = { pool: any; internalToken?: string };
 
 export async function registerInternalRoutes(app: any, deps: Deps) {
   app.get("/internal/users/:id", async (req: any, reply: any) => {
-    // ako želiš internal token zaštitu (opciono), uključi:
-    if (deps.internalToken) {
-      if (!requireInternal(req, reply, deps.internalToken)) return;
-    }
+    if (!requireInternal(req, reply, deps.internalToken || "")) return;
 
     const id = (req.params as any).id as string;
     const res = await getInternalUserById(deps.pool, id);

@@ -15,9 +15,10 @@ export async function getCharacterDetailsCached(args: {
   user: JwtPayload;
 }) {
   const { pool, redis, characterId: id, user } = args;
-
+  
   const cached = await getCharacterCache(redis, id);
   if (cached) {
+    console.log("Cache hit for character", id);
     return { status: 200, body: JSON.parse(cached) };
   }
 
